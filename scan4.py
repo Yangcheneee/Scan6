@@ -21,3 +21,9 @@ def arp_scan(dst_ip_list):
 
     return alive_ip_list
 
+
+if __name__ == "__main__":
+    # dst_ip_list = ["192.168.150.67"]
+    dst_ip_list = IPY("192.168.3.0/24")
+    alive_ip_list = arp_scan(dst_ip_list)
+    print(f"alive_ip_list: {alive_ip_list}")

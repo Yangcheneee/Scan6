@@ -10,7 +10,13 @@ def m_ping():
     # 多播MAC地址和多播IP地址为链路所有节点
     src_mac = "48:a4:72:e6:72:bf"
     dst_mac = "33:33:00:00:00:01"
+    # 链路本地地址
+    # src_ip = "fe80::910c:e419:64df:f2f1"
+    # 临时IPv6地址
+    # src_ip = "2409:8a55:d4b3:da91:fd07:9adc:b3ff:16ca"
+    # IPv6地址1
     src_ip = "fe80::910c:e419:64df:f2f1"
+    # IPv6地址2
     dst_ip = "ff02::1"
 
     for i in range(10):
@@ -28,8 +34,11 @@ def m_ping():
         time.sleep(2)
 
 
-m_ping()
+# m_ping()
 if __name__ == "__main__":
+    """
+    ***特别注意要在发包前修改src_ip地址为当前的链路本地地址***
+    """
     m_ping()
 
 

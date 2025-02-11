@@ -1,36 +1,67 @@
-# import muiticast_ping_sender
-# import multicast_ping_sniffer
-# import ping
-# from multiprocessing import Process
-# import time
-#
-# if __name__ == "__main__":
-#     # 创建两个进程，分别运行func1和func2
-#     process1 = Process(target=muiticast_ping_sender.m_ping(), args=('Python',))
-#     # process2 = Process(target=multicast_ping_sniffer.icmpv6_reply_sniffer(), args=('Python',))
-#     process2 = Process(target=ping.ping())
-#     # 启动进程
-#     process2.start()
-#     process1.start()
-#
-#     # 等待进程完成
-#     process2.join()
-#     process1.join()
-#
-#     print("Both functions have finished execution.")
+import threading
+import multicast_ping_sender
+import multicast_ping_sniffer
+import ping
+from multiprocessing import Process
+import time
 
-import subprocess
-import sys
-sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
+
+def func1():
+    for i in range(1000):
+        # time.sleep(0.1)
+        print(i)
+
+
+def func2():
+    for i in range(1000):
+        # time.sleep(0.1)
+        print(i*10)
+
+
+def mp_run():
+    # 创建两个进程，分别运行func1和func2
+    process1 = Process(target=multicast_ping_sender.m_ping())
+    process2 = Process(target=multicast_ping_sniffer.icmpv6_reply_sniffer())
+    # process2 = Process(target=ping.ping())
+    # 启动进程
+    process1.start()
+    process2.start()
+
+    # 等待进程完成
+    process1.join()
+    process2.join()
+
+    print("Both functions have finished execution.")
+
+
+def mt_run():
+    # 创建线程
+    thread2 = threading.Thread(target=multicast_ping_sniffer.icmpv6_reply_sniffer())
+    thread1 = threading.Thread(target=multicast_ping_sender.m_ping())
+
+    # 启动线程
+    thread1.start()
+    thread2.start()
+
+    # 等待线程结束
+    thread1.join()
+    thread2.join()
+
 
 if __name__ == "__main__":
-    # 运行第一个Python脚本
-    try:
-        subprocess.run(["python", "multicast_ping_sender.py"])
-    except Exception as e:
-        print(f"捕获数据包时发生错误: {e}")
-    try:
-        # 运行第二个Python脚本
-        subprocess.run(["python", "multicast_ping_sniffer.py"])
-    except Exception as e:
-        print(f"捕获数据包时发生错误: {e}")
+    # mt_run()
+    # mp_run()
+    # 创建线程
+    # thread2 = Process(target=func1())
+    # thread1 = Process(target=func2())
+    thread2 = threading.Thread(target=func1())
+    thread1 = threading.Thread(target=func2())
+
+    # 启动线程
+    thread1.start()
+    thread2.start()
+
+    # 等待线程结束
+    thread1.join()
+    thread2.join()
+
