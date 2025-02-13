@@ -52,34 +52,87 @@ def process_packet(packet):
     packet: 捕获的数据包。
     """
     try:
+        # packet.show()
+        src_mac = packet[Ether].src
         if packet.haslayer(DNS):
             dns = packet.getlayer(DNS)
+            # dns.show()
             # 检查是否有响应记录
             if dns.qr == 1:  # QR=1表示响应
-                # src_ip = packet[IPv6].src
-                # dst_ip = packet[IPv6].dst
-                # src_mac = packet[Ether].src
-                # print(f"捕获到源地址为{src_ip}的 ICMPv6 Echo Reply 报文")
+                # print("response!")
                 for answer in dns.an:
-                    if isinstance(answer, DNSRR) and answer.type == 28:
+                    # answer.show()
+                    if answer.type == 33:  # SRV
+                        # answer.show()
+                        hostname = answer.target.decode('utf-8')
+                        service = answer.rrname.decode('utf-8')
+                        if hostname not in host_data:
+                            host_data[hostname] = {"link_local": [], "global_unicast": [], "ip4": [], "service": []}
+                        if service not in host_data[hostname]["service"]:
+                            host_data[hostname]["service"].append(service)
+                            print(host_data)
+                    if answer.type == 1:   # A
+                        # answer.show()
+                        hostname = answer.rrname.decode('utf-8')
+                        ip4 = answer.rdata
+                        if hostname not in host_data:
+                            host_data[hostname] = {"link_local": [], "global_unicast": [], "ip4": [], "service": []}
+                        if ip4 not in host_data[hostname]["ip4"]:
+                            host_data[hostname]["ip4"].append(ip4)
+                        print(host_data)
+                    if isinstance(answer, DNSRR) and answer.type == 28:    # AAAA
+                        # answer.show()
                         hostname = answer.rrname.decode('utf-8')
                         ip = answer.rdata
-                        # print(f"Answer: {answer.rrname.decode('utf-8')} -> {answer.rdata}")
-                        if hostname not in ipv6_data:
-                            ipv6_data[hostname] = {"link_local": [], "global_unicast": []}
-                        if is_lla_ipv6(ip) and ip not in ipv6_data[hostname]["link_local"]:
-                            ipv6_data[hostname]["link_local"].append(ip)
-                            print(ipv6_data)
-                        if is_gua_ipv6(ip) and ip not in ipv6_data[hostname]["global_unicast"]:
-                            ipv6_data[hostname]["global_unicast"].append(ip)
-                            print(ipv6_data)
+                        if hostname not in host_data:
+                            host_data[hostname] = {"link_local": [], "global_unicast": [], "ip4": [], "services": []}
+                        if is_lla_ipv6(ip) and ip not in host_data[hostname]["link_local"]:
+                            host_data[hostname]["link_local"].append(ip)
+                            # print(ipv6_data)
+                        if is_gua_ipv6(ip) and ip not in host_data[hostname]["global_unicast"]:
+                            host_data[hostname]["global_unicast"].append(ip)
+                            # print(ipv6_data)
+                        print(host_data)
+            if hasattr(dns, 'ar') and dns.ar:
+                for answer in dns.ar:
+                    if answer.type == 33:  # SRV
+                        # answer.show()
+                        hostname = answer.target.decode('utf-8')
+                        service = answer.rrname.decode('utf-8')
+                        if hostname not in host_data:
+                            host_data[hostname] = {"link_local": [], "global_unicast": [], "ip4": [], "service": []}
+                        if service not in host_data[hostname]["service"]:
+                            host_data[hostname]["service"].append(service)
+                            print(host_data)
+                    if answer.type == 1:   # A
+                        # answer.show()
+                        hostname = answer.rrname.decode('utf-8')
+                        ip4 = answer.rdata
+                        if hostname not in host_data:
+                            host_data[hostname] = {"link_local": [], "global_unicast": [], "ip4": [], "service": []}
+                        if ip4 not in host_data[hostname]["ip4"]:
+                            host_data[hostname]["ip4"].append(ip4)
+                        print(host_data)
+                    if answer.type == 28:  # AAAA
+                        # answer.show()
+                        hostname = answer.rrname.decode('utf-8')
+                        ip = answer.rdata
+                        if hostname not in host_data:
+                            host_data[hostname] = {"link_local": [], "global_unicast": [], "ip4": [], "services": []}
+                        if is_lla_ipv6(ip) and ip not in host_data[hostname]["link_local"]:
+                            host_data[hostname]["link_local"].append(ip)
+                            # print(ipv6_data)
+                        if is_gua_ipv6(ip) and ip not in host_data[hostname]["global_unicast"]:
+                            host_data[hostname]["global_unicast"].append(ip)
+                            # print(ipv6_data)
+                        print(host_data)
+
     except Exception as e:
         print(f"捕获数据包时发生错误: {e}")
 
 
-# icmpv6_reply_sniffer()
+host_data = {}
 if __name__ == "__main__":
     # 存储提取的 IPv6 地址信息
-    ipv6_data = {}
     # 运行 sniffer 函数
     mdns_response_sniffer()

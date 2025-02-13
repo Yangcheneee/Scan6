@@ -6,7 +6,8 @@ class Conf:
     interface = "WLAN"
     hostname = "DESKTOP-8DUN5OR"
     mac_address = "48:A4:72:E6:72:BF"
-    ip_address = "192.168.31.46"
+    ip_address = "192.168.3.89"
+    # 这台电脑的链路本地地址不会随着时间和接入网络发生变化，可以看看其他设备的情况。
     ip6_adress = "fe80::910c:e419:64df:f2f1"
 
     def __init__(self):
@@ -23,7 +24,7 @@ class Conf:
     def get_hostname(self):
         return socket.gethostname()
 
-    def conf_info(self):
+    def info(self):
         return f"interface: {self.interface}\n" \
                f"hostname: {self.hostname}\n" \
                f"mac_address: {self.mac_address}\n" \
@@ -33,6 +34,6 @@ class Conf:
 
 if __name__ == "__main__":
     conf = Conf()
-    print(conf.conf_info())
+    print(conf.info())
 
 

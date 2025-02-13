@@ -1,30 +1,11 @@
 from scapy.all import *
 import re
-
 from scapy.layers.dns import DNS
 from scapy.layers.inet import IP, UDP
 from scapy.layers.inet6 import IPv6
 from scapy.layers.netbios import NBNSQueryResponse, NBNSHeader, NBNSNodeStatusResponse
 
 hostnames = []
-
-
-def nbns_callback_with_collection(packet):
-    if packet.haslayer(NBNSHeader) and packet.getlayer(IP).src != "192.168.1.12":
-        nbns_response = packet.getlayer(NBNSNodeStatusResponse)
-        nbns_response.show()
-        name_list = nbns_response.NODE_NAME
-        for name in name_list:
-            hostname = name.NETBIOS_NAME
-            print(hostname)
-
-
-def nbns_sniffer():
-    sniff(iface="WLAN",
-          filter="udp port 137",
-          prn=lambda packet: nbns_callback_with_collection(packet),
-          count=-1,
-          store=0)
 
 
 # 处理 mDNS 响应报文
