@@ -24,7 +24,7 @@ def mdns(name_list):
         ether_layer = Ether(src=src_mac, dst=dst_mac)
         ip_layer = IP(dst=dst_ip, src=src_ip)
         trans_layer = UDP(sport=5353, dport=5353)
-        mdns_layer = DNS(rd=1, qd=DNSQR(qtype="AAAA", unicastresponse=1, qname=name + ".local"))
+        mdns_layer = DNS(rd=1, qd=DNSQR(qtype="AAAA", unicastresponse=0, qname=name + ".local"))
         packet = ether_layer/ip_layer/trans_layer/mdns_layer
         # packet.show()
         sendp(packet, verbose=0,  iface="WLAN")

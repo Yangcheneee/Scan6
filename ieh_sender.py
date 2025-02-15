@@ -6,15 +6,15 @@ import time
 from scapy.layers.inet6 import IPv6, ICMPv6EchoRequest, ICMPv6EchoReply
 from scapy.layers.l2 import Ether
 from scapy.sendrecv import sr1, srp1, sendp
+from conf import Conf
 
 
 def ieh_ping():
+    conf = Conf()
     # 多播MAC地址和多播IP地址为链路所有节点
-    src_mac = "48:a4:72:e6:72:bf"
+    src_mac = conf.mac_address
     dst_mac = "33:33:00:00:00:01"
-    # dst_mac = "e2:93:9c:b3:59:56"
-    src_ip = "2409:895a:d103:875b:d68e:d04d:c7:6067"
-    # dst_ip = "2409:895a:d103:875b:747c:feff:fedf:6325"
+    src_ip = conf.ip6_adress
     dst_ip = "ff02::1"
 
     for i in range(10):
@@ -29,6 +29,7 @@ def ieh_ping():
         packet = ether_layer/ip_layer/icmpv6_ping
         # packet.show()
         ans = sendp(packet, verbose=0, iface="WLAN")
+        packet.show()
         print("ICMPv6  Message sent.")
         time.sleep(2)
 

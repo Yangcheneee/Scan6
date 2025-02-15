@@ -1,44 +1,40 @@
 import sys
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 import time
-from scapy.layers.inet6 import IPv6, ICMPv6EchoRequest, ICMPv6EchoReply
 from scapy.layers.l2 import Ether
-from scapy.sendrecv import sr1, srp1, sendp
+from scapy.layers.inet6 import IPv6, ICMPv6EchoRequest, ICMPv6EchoReply
+from scapy.sendrecv import sr1, srp1, sendp, srp, send, sr
+from conf import Conf
 
 
 def m_ping():
-    # 多播MAC地址和多播IP地址为链路所有节点
-    src_mac = "48:a4:72:e6:72:bf"
+    conf = Conf()
+    src_mac = conf.mac_address
+    src_ip = conf.ip6_adress
+    # 多播MAC地址和多播IP地址：本地链路所有节点
     dst_mac = "33:33:00:00:00:01"
-    # 链路本地地址
-    # src_ip = "fe80::910c:e419:64df:f2f1"
-    # 临时IPv6地址
-    # src_ip = "2409:8a55:d4b3:da91:fd07:9adc:b3ff:16ca"
-    # IPv6地址1
-    src_ip = "fe80::910c:e419:64df:f2f1"
-    # IPv6地址2
     dst_ip = "ff02::1"
 
-    for i in range(10):
+    for i in range(4):
         # 创建链路层帧
-        ether_layer = Ether(src=src_mac, dst=dst_mac, type="IPv6")
+        ether_layer = Ether(src=src_mac, dst=dst_mac)
         # 创建IP层数据报
-        ip_layer = IPv6(src=src_ip, dst=dst_ip, hlim=128)
+        # ip_layer = IPv6(src=src_ip, dst=dst_ip, hlim=128)
+        ip_layer = IPv6(src=src_ip, dst=dst_ip)
         # 创建ICMPv6——ping报文
         icmpv6_ping = ICMPv6EchoRequest(id=1, seq=i+50, data="abcdefghijklmnopqrstuvwabcdefghi")
         # 将各层封装为数据包
-        packet = ether_layer/ip_layer/icmpv6_ping
+        query = ether_layer/ip_layer/icmpv6_ping
         # packet.show()
-        ans = sendp(packet, verbose=0, iface="WLAN")
+        response = srp(query, verbose=1, iface="WLAN", timeout=3)
+        if response:
+            for re in response:
+                re.summary()
         print("ICMPv6  Message sent.")
-        time.sleep(2)
+        time.sleep(3)
 
 
-# m_ping()
 if __name__ == "__main__":
-    """
-    ***特别注意要在发包前修改src_ip地址为当前的链路本地地址***
-    """
     m_ping()
 
 
