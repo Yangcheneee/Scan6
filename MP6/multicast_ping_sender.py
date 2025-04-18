@@ -2,15 +2,15 @@ import sys
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 import time
 from scapy.layers.l2 import Ether
-from scapy.layers.inet6 import IPv6, ICMPv6EchoRequest, ICMPv6EchoReply
-from scapy.sendrecv import sr1, srp1, sendp, srp, send, sr
-from conf import Conf
+from scapy.layers.inet6 import IPv6, ICMPv6EchoRequest
+from scapy.sendrecv import srp
+from Conf.conf import Conf
 
 
 def m_ping():
     conf = Conf()
-    src_mac = conf.mac_address
-    src_ip = conf.ip6_adress
+    src_mac = conf.mac
+    src_ip = conf.lla
     # 多播MAC地址和多播IP地址：本地链路所有节点
     dst_mac = "33:33:00:00:00:01"
     dst_ip = "ff02::1"
@@ -31,7 +31,7 @@ def m_ping():
             for re in response:
                 re.summary()
         print("ICMPv6  Message sent.")
-        time.sleep(3)
+        time.sleep(2)
 
 
 if __name__ == "__main__":

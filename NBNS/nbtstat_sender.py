@@ -1,10 +1,26 @@
+import ipaddress
 import sys
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 from scapy.layers.dns import DNS, DNSQR
-from scapy.layers.l2 import Ether
+from scapy.layers.l2 import Ether, ARP
 from scapy.layers.netbios import NBNSQueryRequest, NBNSHeader, NBNSNodeStatusResponse
 from scapy.layers.inet import IP, UDP
 from scapy.sendrecv import sr1, srp1, sendp, send, sr
+from IPy import IP as IPY
+
+
+def is_alive(dst_ip):
+    pkt = ARP(pdst=dst_ip)
+    ans = sr1(pkt, timeout=0.5, verbose=False)
+    if ans is not None:
+        if ans.haslayer(ARP) and ans[ARP].op == 2:
+            src_mac = ans[ARP].hwsrc
+            src_ip = ans[ARP].psrc
+            return src_mac, src_ip
+        else:
+            return None
+    else:
+        return None
 
 
 def nbns_nbtstat(ip_list):
@@ -37,8 +53,8 @@ def nbns_nbtstat(ip_list):
         send(packet, verbose=0)
         # response = sr1(packet, verbose=1, timeout=1)
         # # response.show()
-        # for re in response:
-        #     nbns_get_name(response)
+        # if response:
+        #     response.show()
     return host_name_list
 
 
@@ -57,6 +73,15 @@ def nbns_get_name(packet):
 
 if __name__ == "__main__":
     hostname = []
-    ip_list = ["192.168.233.40"]
+    # info_list = []
+    dst_ip_list = IPY("172.31.99.0/24")
+    # dst_ip_list = ["172.31.99.180"]
+    # ip_list = []
+    # for ip in dst_ip_list:
+    #     # print(f"{ip} scaning...")
+    #     arp_result = is_alive(str(ip))
+    #     if arp_result is not None:
+    #         ip_list.append(ip)
+    ip_list = ["172.31.99.112", "172.31.99.198"]
     hostname_list = nbns_nbtstat(ip_list)
     print(hostname_list)

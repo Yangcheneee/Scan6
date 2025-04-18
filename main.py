@@ -1,18 +1,18 @@
 import sys
-import time
+
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 from scapy.layers.inet import IP, UDP, TCP
 from scapy.layers.dns import DNS, DNSQR
 from scapy.layers.l2 import Ether
 from scapy.layers.netbios import NBNSQueryRequest, NBNSHeader
-from scapy.sendrecv import srp1, sr1, sendp, send, sr
-from conf import Conf
+from scapy.sendrecv import srp1
+from Conf.conf import Conf
 
 
 def test():
     conf = Conf
-    src_mac = conf.mac_address
-    src_ip = conf.ip_address
+    src_mac = conf.mac
+    src_ip = conf.ip
     # mdns_multicast
     dst_mac = "01:00:5E:00:00:FB"
     dst_ip = "224.0.0.251"
@@ -28,8 +28,8 @@ def test():
 
 def nbns_nbtstat(ip_list):
     conf = Conf()
-    src_mac = conf.mac_address
-    src_ip = conf.ip_address
+    src_mac = conf.mac
+    src_ip = conf.ip
     host_name_list = []
     for ip in ip_list:
         ether_layer = Ether(src=src_mac)

@@ -8,14 +8,14 @@ from scapy.layers.llmnr import LLMNRQuery
 from scapy.layers.inet import UDP, IP
 from scapy.layers.inet6 import IPv6
 from scapy.layers.l2 import Ether
-from scapy.sendrecv import sr1, srp1, sendp
-from conf import Conf
+from scapy.sendrecv import srp1, sendp
+from Conf.conf import Conf
 
 
 def mdns(name_list):
     conf = Conf()
-    src_mac = conf.mac_address
-    src_ip = conf.ip_address
+    src_mac = conf.mac
+    src_ip = conf.ip4
     # mdns_multicast
     dst_mac = "01:00:5E:00:00:FB"
     dst_ip = "224.0.0.251"
@@ -38,8 +38,8 @@ def mdns(name_list):
 
 def mdns6(name_list):
     conf = Conf()
-    src_mac = conf.mac_address
-    src_ip = conf.ip6_adress
+    src_mac = conf.mac
+    src_ip = conf.lla
     # mdns_multicast
     dst_mac = "33:33:00:00:00:fb"
     dst_ip = "ff02::fb"
@@ -62,8 +62,8 @@ def mdns6(name_list):
 
 def llmnr(name_list):
     conf = Conf()
-    src_mac = conf.mac_address
-    src_ip = conf.ip_address
+    src_mac = conf.mac
+    src_ip = conf.ip4
     dst_mac = "01:00:5e:00:00:fc"
     dst_ip = "224.0.0.252"
     for name in name_list:
@@ -86,8 +86,8 @@ def llmnr(name_list):
 
 def llmnr6(name_list):
     conf = Conf()
-    src_mac = conf.mac_address
-    src_ip = conf.ip6_adress
+    src_mac = conf.mac
+    src_ip = conf.lla
     dst_mac = "33:33:00:01:00:03"
     dst_ip = "ff02::1:3"
     for name in name_list:
@@ -107,10 +107,9 @@ def llmnr6(name_list):
 
 
 if __name__ == "__main__":
-    # name_list = ["DESKTOP-8DUN5OR", "xiaolongdeMacBook-Pro", "Android", "CHINAMI-0BD1HT7", "PC-20201106JZIG", "LAPTOP-74UIJ3MD", "HPAEBD13", "LAPTOP-MHFMAPKM", "Ryan"]
-    name_list = ["PC-20201106JZIG", "LAPTOP-74UIJ3MD", "HPAEBD13", "LAPTOP-MHFMAPKM"]
+    name_list = ["DESKTOP-G1AD8NT"]
     mdns(name_list)
-    # mdns6(name_list)
+    mdns6(name_list)
     # llmnr6(name_list)
     # llmnr(name_list)
 
