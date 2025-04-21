@@ -1,9 +1,9 @@
 import multiprocessing
-
 import HScan6_quick
 import smb_scan
-import conf
 import dhcp_sniffer
+import smb_sniffer
+import mdns_sniffer
 
 
 def quick_scan():
@@ -23,12 +23,19 @@ def quick_scan():
 
 
 if __name__ == "__main__":
-    conf_info = conf.get_interface_info("{F52FC252-BAEC-4BA6-A8CA-8706641245A6}")
-    quick_scan()
-    """"
-    Function: dhcp_sniffer.run
-    : Param
-        duration: sniffer函数监听时间
-        save_file: 结果保存的位置
     """
-    dhcp_sniffer.run(duration=10 * 60, save_file="../result/dhcp_sniffer.csv")
+    save_path参数是保存的路径，程序将会根据当前时间生成文件名
+    """
+    # HScan6_quick.run(target="172.31.99.0/24", save_path="../result/mdns_scan/")
+    smb_scan.run(target="172.31.99.255", save_path="../result/smb_scan/")
+
+    """
+    save_file参数是保存的文件，程序将会以追加的方式写入文件
+    duration监听时间，单位为秒
+    """
+    dhcp_sniffer.run(interface="WLAN", duration=60, save_file="../result/dhcp_sniffer.csv")
+    mdns_sniffer.run(interface="WLAN", duration=60, save_file="../result/mdns_sniffer.csv")
+    smb_sniffer.run(interface="WLAN", duration=60, save_file="../result/smb_sniffer.csv")
+
+
+

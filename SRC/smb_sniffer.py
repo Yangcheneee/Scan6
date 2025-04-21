@@ -1,6 +1,5 @@
 from scapy.all import *
 import pandas as pd
-from scapy import *
 from scapy.layers.inet import UDP, IP
 from scapy.layers.l2 import Ether
 from scapy.layers.netbios import NBTSession, NetBIOS_DS, NBNSHeader

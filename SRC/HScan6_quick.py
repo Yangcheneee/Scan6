@@ -1,6 +1,5 @@
 import sys
 from datetime import datetime
-
 from scapy.layers.l2 import Ether, ARP
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 from scapy.layers.dns import DNS, DNSQR, DNSRR
@@ -110,7 +109,7 @@ def run(target="172.31.99.0/24", save_path="../result/mdns_scan/"):
     print("DNS-SD协议扫描中...")
     dst_ip_list = IPY(target)
     info_list = []
-    for ip in tqdm(dst_ip_list):
+    for ip in dst_ip_list:
         arp_result = arp_scan(str(ip))
         if arp_result is not None:
             info = {
@@ -141,7 +140,7 @@ def run(target="172.31.99.0/24", save_path="../result/mdns_scan/"):
             info["service"] = tuple(info["service"])
             info["service_instance"] = tuple(info["service_instance"])
             info["target"] = tuple(info["target"])
-            tqdm.write(f"{info}")
+            print(info)
             info_list.append(info)
     if info_list:
         df = pd.DataFrame(info_list)

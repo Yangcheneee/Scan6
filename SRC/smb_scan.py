@@ -4,15 +4,15 @@ from scapy.layers.inet import UDP, IP
 from scapy.layers.l2 import Ether
 from scapy.layers.netbios import NBTDatagram
 from scapy.layers.smb import BRWS_HostAnnouncement, SMB_Header, SMBTransaction_Request
-from SRC import name_resolver
+import name_resolver
 import conf
 
 info_list = []
 
 
-def generate_smb_packet():
+def generate_smb_packet(broadcast):
     conf_info = conf.get_interface_info(conf.WLAN)
-    ip_layer = IP(dst=conf_info["broadcast"])
+    ip_layer = IP(dst=broadcast)
     udp_layer = UDP(sport=138, dport=138)
     nbds_layer = NBTDatagram(Type=17, Flags=0x0a, SourceIP=conf_info["ipv4_address"], SourcePort=138, SourceName=socket.gethostname() + "<00>", DestinationName="WORKGROUP")
     smb_header = SMB_Header(Command=0x25, Flags=0x00)
@@ -62,9 +62,9 @@ def handle_smb_packet(packet):
                 info_list.append(info)
 
 
-def run(interface="WLAN", save_path="../result/smb_scan/"):
+def run(target="172.31.99.255", interface="WLAN", save_path="../result/smb_scan/"):
     print("MS-BRWS协议扫描中...")
-    generate_smb_packet()
+    generate_smb_packet(target)
     wait_time = 30
     # 捕获DHCP流量(端口67和68)
     try:
