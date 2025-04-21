@@ -42,7 +42,7 @@ def handle_dhcp_packet(packet):
 
 if __name__ == "__main__":
     # 读取PCAP文件
-    packets = rdpcap('../data/dhcp.pcapng')
+    packets = rdpcap('../pacp/dhcp.pcapng')
 
     info_list = []
     # 遍历数据包
@@ -78,4 +78,3 @@ if __name__ == "__main__":
     # df_unique = df.drop_duplicates(subset=['mac'], keep='first')
     #
     # # 保存结果（可选）
-    # df_unique.to_csv('../data/dhcp_unique.csv', index=False)

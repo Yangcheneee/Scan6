@@ -29,7 +29,7 @@ def handle_smb_packet(packet):
 
 def run():
     # 读取PCAP文件
-    packets = rdpcap('../data/smb.pcapng')
+    packets = rdpcap('../pacp/smb.pcapng')
 
     # 遍历数据包
     smb_info_list = []

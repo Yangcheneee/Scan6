@@ -45,13 +45,15 @@ def handle_smb_packet(packet):
         print(f"解析数据包时发生错误: {e}")
 
 
-def run(interface="WLAN", duration=12*60, save_file="../result/smb_sniffer.csv"):
+def run(interface="WLAN", duration=12*60, save_file="../result6/smb_sniffer.csv"):
     update_periodicity_minutes = 12
     try:
         print("捕获SMB报文中...")
         sniff(filter="udp and port 138", timeout=duration, prn=handle_smb_packet, store=0, iface=interface)
     except KeyboardInterrupt:
         print("\n停止捕获，正在保存数据...")
+    except Exception as e:
+        print(f"捕获数据包时发生错误: {e}")
     finally:
         if info_list:
             df = pd.DataFrame(info_list)

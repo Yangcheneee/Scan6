@@ -80,7 +80,7 @@ def process_packet(packet):
         print(f"解析数据包时发生错误: {e}")
 
 
-def run(interface="WLAN", duration=10*60, save_file="../result/mdns_sniffer.csv"):
+def run(interface="WLAN", duration=10*60, save_file="../result6/mdns_sniffer.csv"):
     """
     捕获指定接口上的 MDNS response 报文。
 
@@ -97,6 +97,8 @@ def run(interface="WLAN", duration=10*60, save_file="../result/mdns_sniffer.csv"
             timeout=duration,
             store=0  # 不存储捕获的数据包，节省内存
         )
+    except KeyboardInterrupt:
+        print("\n停止捕获，正在保存数据...")
     except Exception as e:
         print(f"捕获数据包时发生错误: {e}")
     finally:

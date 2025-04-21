@@ -62,7 +62,7 @@ def handle_smb_packet(packet):
                 info_list.append(info)
 
 
-def run(target="172.31.99.255", interface="WLAN", save_path="../result/smb_scan/"):
+def run(target="172.31.99.255", interface="WLAN", save_path="../result6/smb_scan/"):
     print("MS-BRWS协议扫描中...")
     generate_smb_packet(target)
     wait_time = 30

@@ -26,7 +26,7 @@ if __name__ == "__main__":
     """
     save_path参数是保存的路径，程序将会根据当前时间生成文件名
     """
-    # HScan6_quick.run(target="172.31.99.0/24", save_path="../result/mdns_scan/")
+    # HScan6_quick.run(target="172.31.99.0/24", save_path="../result6/mdns_scan/")
     smb_scan.run(target="172.31.99.255", save_path="../result/smb_scan/")
 
     """

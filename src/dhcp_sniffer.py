@@ -53,13 +53,15 @@ def handle_dhcp_packet(packet):
         print(f"解析数据包时发生错误: {e}")
 
 
-def run(interface="WLAN", duration=10*60, save_file="../result/dhcp_sniffer.csv"):
+def run(interface="WLAN", duration=10*60, save_file="../result6/dhcp_sniffer.csv"):
     # 捕获DHCP流量(端口67和68)
     try:
         print("捕获DHCP Discover/Request报文中...")
         sniff(iface=interface, filter="udp and (port 67 or port 68)", timeout=duration, prn=handle_dhcp_packet, store=0)
     except KeyboardInterrupt:
         print("\n停止捕获，正在保存数据...")
+    except Exception as e:
+        print(f"捕获数据包时发生错误: {e}")
     finally:
         if info_list:
             df = pd.DataFrame(info_list)
