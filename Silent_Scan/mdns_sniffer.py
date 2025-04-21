@@ -1,12 +1,10 @@
 import sys
 
 from scapy.layers.dns import DNS, DNSRR
-from scapy.layers.l2 import Ether
 
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 from scapy.all import sniff
-from scapy.layers.inet6 import IPv6, ICMPv6EchoReply
-from Conf import conf
+import conf
 
 
 # link local address

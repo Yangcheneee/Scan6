@@ -21,8 +21,8 @@ def is_gua_ipv6(ip):
 def extract_info(packet):
     service_instance_list = []
     target_list = []
-    hostname_list = []
-    lla_list = []
+    hostname_list = None
+    lla_list = None
     gua_list = []
     if packet.haslayer(DNSRR):
         dns = packet.getlayer(DNS)
@@ -40,12 +40,12 @@ def extract_info(packet):
                     hostname = answer.rrname.decode('utf-8')
                     # ip4 = answer.rdata
                     # info["ip4"].append(ip4)
-                    hostname_list.append(hostname)
+                    hostname_list = hostname
                 if answer.type == 28:  # AAAA
                     # answer.show()
                     ip6 = answer.rdata
                     if is_lla_ipv6(ip6):
-                        lla_list.append(ip6)
+                        lla_list = ip6
                     if is_gua_ipv6(ip6):
                         gua_list.append(ip6)
         return hostname_list, lla_list, gua_list, service_instance_list, target_list
@@ -122,27 +122,24 @@ def is_alive(dst_ip):
         return None
 
 
-if __name__ == "__main__":
-    # info_list = []
+def run():
     dst_ip_list = IPY("172.31.99.0/24")
-    # dst_ip_list = ["172.31.99.180"]
     for ip in dst_ip_list:
-        # print(f"{ip} scaning...")
         arp_result = is_alive(str(ip))
         if arp_result is not None:
             info = {
-                "mac": [],
-                "ip4": [],
-                "hostname": [],
-                "lla": [],
+                "mac": None,
+                "ip4": None,
+                "hostname": None,
+                "lla": None,
                 "gua": [],
                 "service": [],
                 "service_instance": [],
                 "target": [],
             }
             mac, ip4 = arp_result
-            info["mac"].append(mac)
-            info["ip4"].append(ip4)
+            info["mac"] = mac
+            info["ip4"] = ip4
             service_list = get_service_list(str(ip))
             if service_list is not None:
                 info["service"] = service_list
@@ -155,3 +152,7 @@ if __name__ == "__main__":
                     info["service_instance"] = service_instance_list
                     info["target"] = target_list
             print(info)
+
+
+if __name__ == "__main__":
+    run()

@@ -6,7 +6,7 @@ from scapy.layers.dns import DNS, DNSQR
 from scapy.layers.l2 import Ether
 from scapy.layers.netbios import NBNSQueryRequest, NBNSHeader
 from scapy.sendrecv import srp1
-from Conf.conf import Conf
+from conf import Conf
 
 
 def test():

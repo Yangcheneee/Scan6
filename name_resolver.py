@@ -9,7 +9,7 @@ from scapy.layers.inet import UDP, IP
 from scapy.layers.inet6 import IPv6
 from scapy.layers.l2 import Ether
 from scapy.sendrecv import srp1, sendp
-from Conf.conf import Conf
+from conf import Conf
 
 
 def mdns(name_list):

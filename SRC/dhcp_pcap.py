@@ -3,6 +3,8 @@ from scapy.layers.dhcp import DHCP, BOOTP
 import pandas as pd
 from scapy.layers.l2 import Ether
 
+import name_resolver
+
 
 # 提取标准BOOTP chaddr（客户端MAC）
 def handle_dhcp_packet(packet):
@@ -51,14 +53,24 @@ if __name__ == "__main__":
 
     # 方法3：使用Pandas去重
     df = pd.DataFrame(info_list)
-    # df.to_csv('../data/dhcp.csv', index=False, mode='a', header=False)
     # print(df)
     df_unique = df.drop_duplicates()  # 完全相同的行
     print(df_unique)
     # 或者按MAC列去重
     df_unique_mac = df_unique.drop_duplicates(subset=['mac'], keep='last')
     print(df_unique_mac)
-    df_unique_mac.to_csv('dhcp.csv', index=False)  # index=False表示不保存行索引
+
+    hostname_list = df_unique_mac['hostname']
+    ip6_info_list = []
+    for hostname in hostname_list:
+        if hostname:
+            ip6_info = name_resolver.mdns(hostname)
+            if ip6_info:
+                ip6_info_list.append(ip6_info)
+    df2 = pd.DataFrame(ip6_info_list)
+    df_merged = pd.merge(df_unique_mac, df2, on="hostname", how="outer")
+    df_merged.to_csv("../test/dhcp_merge.csv")
+    print(df_merged)
     # print(df_unique_mac.to_dict('records'))
     # 读取CSV文件
     #

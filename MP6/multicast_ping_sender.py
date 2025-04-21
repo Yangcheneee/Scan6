@@ -4,7 +4,7 @@ import time
 from scapy.layers.l2 import Ether
 from scapy.layers.inet6 import IPv6, ICMPv6EchoRequest
 from scapy.sendrecv import srp
-from Conf.conf import Conf
+from conf import Conf
 
 
 def m_ping():

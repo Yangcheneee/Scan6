@@ -1,9 +1,7 @@
-import time
-
 from scapy.all import *
-from scapy.layers.inet6 import IPv6, ICMPv6MLQuery, IPv6ExtHdrHopByHop, HBHOptUnknown
+from scapy.layers.inet6 import IPv6, ICMPv6MLQuery
 from scapy.layers.l2 import Ether
-from Conf.conf import Conf
+from conf import Conf
 
 
 # 定义MLD查询数据包

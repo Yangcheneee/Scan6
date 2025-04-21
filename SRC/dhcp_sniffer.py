@@ -1,8 +1,11 @@
 from scapy.all import *
 from scapy.layers.dhcp import DHCP, BOOTP
-from scapy.layers.inet import UDP, IP
 from scapy.layers.l2 import Ether
 import pandas as pd
+from datetime import datetime
+import name_resolver
+
+info_list = []
 
 
 def handle_dhcp_packet(packet):
@@ -20,7 +23,10 @@ def handle_dhcp_packet(packet):
             "mac": None,
             "ip4": None,
             "hostname": None,
-            "vendor": None
+            "lla": None,
+            "gua": [],
+            "vendor": None,
+            # "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         }
         for option in packet[DHCP].options:
             if isinstance(option, tuple):
@@ -34,23 +40,32 @@ def handle_dhcp_packet(packet):
                     info["ip4"] = option[1]
         if info["mac"] is None:
             info["mac"] = packet[Ether].src
-        print(f"{info}")
+        if info["hostname"] is not None:
+            ip6_info = name_resolver.mdns(info["hostname"])
+            if ip6_info is not None:
+                info["lla"] = ip6_info["lla"]
+                info["gua"] = ip6_info["gua"]
+        print(info)
         info_list.append(info)
 
 
-if __name__ == "__main__":
-    info_list = []
+def run(duration=10*60, interface="WLAN", save_file="../result/dhcp_sniffer.csv"):
     # 捕获DHCP流量(端口67和68)
     try:
         print("捕获DHCP Discover/Request报文中...")
-        sniff(filter="udp and (port 67 or port 68)", timeout=10*60, prn=handle_dhcp_packet, store=0)
+        sniff(iface=interface, filter="udp and (port 67 or port 68)", timeout=duration, prn=handle_dhcp_packet, store=0)
     except KeyboardInterrupt:
         print("\n停止捕获，正在保存数据...")
-    df = pd.DataFrame(info_list)
-    # 去除完全相同的行
-    df_unique = df.drop_duplicates()
-    # print(df_unique)
-    # 或者按MAC列去重
-    df_unique_mac = df_unique.drop_duplicates(subset=['mac'], keep='last')
+    finally:
+        if info_list:
+            df = pd.DataFrame(info_list)
+            # 去除完全重复的行（所有列值相同）
+            df = df.drop_duplicates()
+            df.to_csv(save_file, index=False, header=not os.path.exists(save_file), mode='a')
+            print(f"数据已保存到 {save_file}")
+        else:
+            print("未捕获到数据，未生成文件。")
 
-    print(df_unique_mac)
+
+if __name__ == "__main__":
+    run()

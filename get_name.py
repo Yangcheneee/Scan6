@@ -6,7 +6,7 @@ from scapy.layers.l2 import Ether
 from scapy.layers.netbios import NBNSQueryRequest, NBNSHeader
 from scapy.layers.inet import IP, UDP
 from scapy.sendrecv import sr1, srp1
-from Conf.conf import Conf
+from conf import Conf
 
 
 def nbns_nbtstat(ip_list):

@@ -1,11 +1,9 @@
-from scapy.layers.dhcp import DHCP, BOOTP
-import pandas as pd
-from scapy import *
-from scapy.layers.inet import UDP, IP
-from scapy.layers.l2 import Ether
-from scapy.layers.netbios import NBTSession, NetBIOS_DS, NBNSHeader
-from scapy.layers.smb import BRWS_HostAnnouncement, SMB_Header, SMBTransaction_Request
 from scapy.utils import rdpcap
+from scapy.layers.l2 import Ether
+from scapy.layers.inet import UDP, IP
+from scapy.layers.smb import BRWS_HostAnnouncement, SMB_Header, SMBTransaction_Request
+import pandas as pd
+import name_resolver
 
 
 def handle_smb_packet(packet):
@@ -14,7 +12,6 @@ def handle_smb_packet(packet):
     """
     if packet.haslayer(UDP) and packet.dport == 138:  # NetBIOS Datagram Service
         # 检查是否是SMB协议
-        # packet.show()
         if packet.haslayer(SMB_Header):
             info = {"mac": None, "ip4": None, "hostname": None, "os": None, "server": None}
             smb_com = packet.getlayer(5)
@@ -30,22 +27,43 @@ def handle_smb_packet(packet):
             return info
 
 
-if __name__ == "__main__":
+def run():
     # 读取PCAP文件
     packets = rdpcap('../data/smb.pcapng')
 
-    info_list = []
     # 遍历数据包
+    smb_info_list = []
     for pkt in packets:
-        info = handle_smb_packet(pkt)
-        if info:
-            info_list.append(info)
+        smb_info = handle_smb_packet(pkt)
+        if smb_info:
+            smb_info_list.append(smb_info)
+
     # 去除完全相同的行
-    df = pd.DataFrame(info_list)
+    df = pd.DataFrame(smb_info_list)
     df_unique = df.drop_duplicates()
-    # print(df_unique)
-    # 或者按MAC列去重
+    # 按MAC列去重
     df_unique_mac = df_unique.drop_duplicates(subset=['mac'], keep='last')
-    print(df_unique_mac)
-    # # 保存结果（可选）
-    df_unique_mac.to_csv('../data/smb.csv', index=False)
+
+    # 主机名解析
+    ip6_info_list = []
+    hostname_list = df_unique_mac['hostname']
+    for hostname in hostname_list:
+        if hostname:
+            ip6_info = name_resolver.mdns(hostname)
+            if ip6_info:
+                ip6_info_list.append(ip6_info)
+    df2 = pd.DataFrame(ip6_info_list)
+    if not df2.empty:
+        df_merged = pd.merge(df_unique_mac, df2, on="hostname", how="outer")
+        df.sort_values("IP_int").drop("IP_int", axis=1)
+        sorted_df = df_merged.sort_values("ip4")
+        sorted_df.to_csv("../test/smb_pcap.csv", index=False)
+        print(sorted_df)
+    else:
+        sorted_df = df_unique_mac.sort_values("ip4")
+        sorted_df.to_csv("../test/smb_pcap.csv", index=False)
+        print(sorted_df)
+
+
+if __name__ == "__main__":
+    run()

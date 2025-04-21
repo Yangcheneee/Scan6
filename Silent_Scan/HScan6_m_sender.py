@@ -1,12 +1,11 @@
 import sys
 import time
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
-from Conf.conf import Conf
-from scapy.layers.dns import DNS, DNSQR, DNSRR
+from conf import Conf
+from scapy.layers.dns import DNS, DNSQR
 from scapy.layers.l2 import Ether
 from scapy.layers.inet import IP, UDP
-from scapy.sendrecv import sendp, send, sr1
-from IPy import IP as IPY
+from scapy.sendrecv import sendp
 
 
 def get_service_list_m():
@@ -40,7 +39,7 @@ def get_service_instance_list_m(service_list):
         # DNS Services Discovery: _services._dns-sd._udp.local
         ether_layer = Ether(src=src_mac, dst=dst_mac)
         mdns_layer1 = DNS(id=0x0000, rd=1, qd=DNSQR(qtype="PTR", unicastresponse=0, qname=service))
-        mdns_layer2 = DNS(id=0x0000, rd=1, qd=DNSQR(qtype="PTR", unicastresponse=1, qname=service))
+        mdns_layer2 = DNS(id=0x0000, rd=1, qd=DNSQR(qtype="PTR", unicastresponse=0, qname=service))
         trans_layer = UDP(sport=5353, dport=5353)
         # 注意这个地方源端口不能为5353
         ip_layer = IP(dst=dst_ip, src=src_ip, ttl=255)
@@ -74,5 +73,5 @@ if __name__ == "__main__":
                     '_sftp-ssh._tcp.local.',
                     '_uscan._tcp.local.',
                     '_uscans._tcp.local.']
-    service_list = ["_dosvc._tcp.local.", "_rdlink._tcp.local."]
+    service_list = ["_airplay._tcp.local"]
     get_service_instance_list_m(service_list)
