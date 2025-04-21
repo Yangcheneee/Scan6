@@ -27,7 +27,6 @@ def generate_smb_packet():
     # trans_request.show()
     # browser.show()
     packet = ip_layer / udp_layer / nbds_layer / smb_header/trans_request
-    # smb_mailslot.show()
     send(packet, verbose=0)
 
 
@@ -37,56 +36,53 @@ def handle_smb_packet(packet):
     """
     if packet.haslayer(UDP) and packet.dport == 138:  # NetBIOS Datagram Service
         # 检查是否是SMB协议
-        # packet.show()
         if packet.haslayer(SMB_Header):
-            info = {"mac": None, "ip4": None, "hostname": None, "os": None, "server": None}
             smb_com = packet.getlayer(5)
             data = smb_com.Buffer[0]
             if data[1].haslayer(BRWS_HostAnnouncement):
-                info["mac"] = packet[Ether].src
-                info["ip4"] = packet[IP].src
+                info = {
+                    "mac": packet[Ether].src,
+                    "ip4": packet[IP].src,
+                    "hostname": None,
+                    "lla": None,
+                    "gua": [],
+                    "os": None,
+                    "server": None
+                }
                 browser = data[1].getlayer(BRWS_HostAnnouncement)
                 info["hostname"] = browser.ServerName.decode()[:15]
                 info["os"] = str(browser.OSVersionMajor) + "." + str(browser.OSVersionMinor)
                 info["server"] = browser.ServerType
+                ip6_info = name_resolver.mdns(info["hostname"])
+                if ip6_info is not None:
+                    info["lla"] = ip6_info["lla"]
+                    info["gua"] = ip6_info["gua"]
+                info["gua"] = tuple(info["gua"])
                 print(info)
-            info_list.append(info)
+                info_list.append(info)
 
 
-def run():
+def run(interface="WLAN", save_path="../result/smb_scan/"):
+    print("MS-BRWS协议扫描中...")
     generate_smb_packet()
     wait_time = 30
     # 捕获DHCP流量(端口67和68)
     try:
-        print("捕获SMB报文中...")
-        sniff(filter="udp and port 138", timeout=wait_time, prn=handle_smb_packet, store=0, iface="WLAN")
+        sniff(filter="udp and port 138", timeout=wait_time, prn=handle_smb_packet, store=0, iface=interface)
     except KeyboardInterrupt:
         print("\n停止捕获，正在保存数据...")
-
-    # 去除完全相同的行
-    df = pd.DataFrame(info_list)
-    df_unique = df.drop_duplicates()
-    # print(df_unique)
-    # 或者按MAC列去重
-    df_unique_mac = df_unique.drop_duplicates(subset=['hostname'], keep='last')
-    # 主机名解析
-    ip6_info_list = []
-    hostname_list = df_unique_mac['hostname']
-    for hostname in hostname_list:
-        if hostname:
-            ip6_info = name_resolver.mdns(hostname)
-            if ip6_info:
-                ip6_info_list.append(ip6_info)
-    df2 = pd.DataFrame(ip6_info_list)
-    if not df2.empty:
-        df_merged = pd.merge(df_unique_mac, df2, on="hostname", how="outer")
-        sorted_df = df_merged.sort_values("ip4")
-        sorted_df.to_csv("../test/smb_pcap.csv", index=False)
-        # print(sorted_df)
-    else:
-        sorted_df = df_unique_mac.sort_values("ip4")
-        sorted_df.to_csv("../test/smb_pcap.csv", index=False)
-        # print(sorted_df)
+    finally:
+        if info_list:
+            df = pd.DataFrame(info_list)
+            # 去除完全重复的行（所有列值相同）
+            # df = df.drop_duplicates()
+            # 或者按MAC列去重
+            # df_unique_mac = df_unique.drop_duplicates(subset=['hostname'], keep='last')
+            save_file = save_path + datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+            df.to_csv(save_file, index=False, mode='a')
+            print(f"数据已保存到 {save_file}")
+        else:
+            print("未捕获到数据，未生成文件。")
 
 
 if __name__ == "__main__":

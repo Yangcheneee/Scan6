@@ -73,6 +73,7 @@ def process_packet(packet):
                             info["lla"] = ip
                         if is_gua_ipv6(ip):
                             info["gua"].append(ip)
+                info["gua"] = tuple(info["gua"])
                 print(info)
                 info_list.append(info)
     except Exception as e:
@@ -110,4 +111,4 @@ def run(interface="WLAN", duration=10*60, save_file="../result/mdns_sniffer.csv"
 
 
 if __name__ == "__main__":
-    run()
+    run(duration=30)

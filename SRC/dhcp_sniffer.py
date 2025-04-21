@@ -9,47 +9,51 @@ info_list = []
 
 
 def handle_dhcp_packet(packet):
-    if DHCP in packet and packet[DHCP].options:
-        # 检查报文类型是否为Discover (1) 或 Request (3)
-        is_discover_or_request = False
-        for opt in packet[DHCP].options:
-            if isinstance(opt, tuple) and opt[0] == 'message-type':
-                if opt[1] in [3]:  # 1=Discover, 3=Request
-                    is_discover_or_request = True
-                break
-        if not is_discover_or_request:
-            return None
-        info = {
-            "mac": None,
-            "ip4": None,
-            "hostname": None,
-            "lla": None,
-            "gua": [],
-            "vendor": None,
-            # "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-        for option in packet[DHCP].options:
-            if isinstance(option, tuple):
-                if option[0] == 'hostname':  # Option 12
-                    info["hostname"] = option[1].decode('utf-8', errors='ignore')
-                if option[0] == 'vendor_class_id':  # Option 60
-                    info["vendor"] = option[1].decode()
-                if option[0] == 'client_id':  # Option 61
-                    info["mac"] = ":".join(f"{b:02x}" for b in packet[BOOTP].chaddr[:6])
-                if option[0] == 'requested_addr':  # Option 50
-                    info["ip4"] = option[1]
-        if info["mac"] is None:
-            info["mac"] = packet[Ether].src
-        if info["hostname"] is not None:
-            ip6_info = name_resolver.mdns(info["hostname"])
-            if ip6_info is not None:
-                info["lla"] = ip6_info["lla"]
-                info["gua"] = ip6_info["gua"]
-        print(info)
-        info_list.append(info)
+    try:
+        if DHCP in packet and packet[DHCP].options:
+            # 检查报文类型是否为Discover (1) 或 Request (3)
+            is_discover_or_request = False
+            for opt in packet[DHCP].options:
+                if isinstance(opt, tuple) and opt[0] == 'message-type':
+                    if opt[1] in [3]:  # 1=Discover, 3=Request
+                        is_discover_or_request = True
+                    break
+            if not is_discover_or_request:
+                return None
+            info = {
+                "mac": None,
+                "ip4": None,
+                "hostname": None,
+                "lla": None,
+                "gua": [],
+                "vendor": None,
+                # "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }
+            for option in packet[DHCP].options:
+                if isinstance(option, tuple):
+                    if option[0] == 'hostname':  # Option 12
+                        info["hostname"] = option[1].decode('utf-8', errors='ignore')
+                    if option[0] == 'vendor_class_id':  # Option 60
+                        info["vendor"] = option[1].decode()
+                    if option[0] == 'client_id':  # Option 61
+                        info["mac"] = ":".join(f"{b:02x}" for b in packet[BOOTP].chaddr[:6])
+                    if option[0] == 'requested_addr':  # Option 50
+                        info["ip4"] = option[1]
+            if info["mac"] is None:
+                info["mac"] = packet[Ether].src
+            if info["hostname"] is not None:
+                ip6_info = name_resolver.mdns(info["hostname"])
+                if ip6_info is not None:
+                    info["lla"] = ip6_info["lla"]
+                    info["gua"] = ip6_info["gua"]
+            info["gua"] = tuple(info["gua"])
+            print(info)
+            info_list.append(info)
+    except Exception as e:
+        print(f"解析数据包时发生错误: {e}")
 
 
-def run(duration=10*60, interface="WLAN", save_file="../result/dhcp_sniffer.csv"):
+def run(interface="WLAN", duration=10*60, save_file="../result/dhcp_sniffer.csv"):
     # 捕获DHCP流量(端口67和68)
     try:
         print("捕获DHCP Discover/Request报文中...")
@@ -68,4 +72,4 @@ def run(duration=10*60, interface="WLAN", save_file="../result/dhcp_sniffer.csv"
 
 
 if __name__ == "__main__":
-    run()
+    run(duration=30)
