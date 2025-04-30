@@ -1,14 +1,18 @@
 import os
 import sys
 from datetime import datetime
-from scapy.layers.inet6 import IPv6, ICMPv6ND_NA, ICMPv6NDOptDstLLAddr
+
+from scapy.layers.dhcp import DHCP, BOOTP
+from scapy.layers.dhcp6 import DHCP6_Solicit, DHCP6_InfoRequest, DHCP6OptClientFQDN, DHCP6OptVendorClass
+from scapy.layers.inet6 import IPv6, ICMPv6ND_NA, ICMPv6NDOptDstLLAddr, ICMPv6EchoReply
+from scapy.layers.inet6 import ICMPv6MLReport, ICMPv6MLQuery  # MLDv1/v2 协议层
 from scapy.layers.l2 import Ether
 import pandas as pd
 from scapy.all import sniff
 from scapy.layers.dns import DNS, DNSRR
 from scapy.layers.netbios import NBNSQueryRequest, NBNSRegistrationRequest
 from scapy.layers.netbios import NBTDatagram
-from scapy.layers.smb import BRWS_HostAnnouncement
+from scapy.layers.smb import BRWS_HostAnnouncement, SMB_Header
 
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 
@@ -16,7 +20,18 @@ sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 GLOBAL_DEVICES = {}  # 核心数据结构: {mac: device_info}
 LLA_PREFIX = ("fe80::", "fe80:")  # 链路本地地址前缀
 GUA_PREFIX = ("2001:", "2000:")  # 全局单播地址前缀 (按需扩展)
-
+IANA_ENTERPRISE_NUMBERS = {
+    9: "ciscoSystems",
+    35: "Nortel Networks",
+    43: "3Com",
+    311: "Microsoft",
+    2636: "Juniper Networks, Inc.",
+    4526: "Netgear",
+    5771: "Cisco Systems, Inc.",
+    5842: "Cisco Systems",
+    11129: "Google, Inc",
+    16885: "Nortel Networks",
+}
 
 # ========================== 工具函数 ==========================
 def is_lla(ip: str) -> bool:
@@ -35,8 +50,11 @@ def update_device_info(mac: str, new_data: dict):
         GLOBAL_DEVICES[mac] = {
             "mac": mac,
             "nbns_name": None,
+            "os_version": None,
             "llmnr_name": None,
             "hostname": None,
+            "enterprise": None,
+            "vendor_class": None,
             "ipv4": None,
             "ipv6_lla": None,
             "ipv6_gua": [],
@@ -51,6 +69,10 @@ def update_device_info(mac: str, new_data: dict):
     device["hostname"] = new_data.get("hostname") or device["hostname"]
     device["ipv4"] = new_data.get("ipv4") or device["ipv4"]
     device["nbns_name"] = new_data.get("nbns_name") or device["nbns_name"]
+    device["dhcp_name"] = new_data.get("dhcp_name") or device["dhccp_name"]
+    device["os_version"] = new_data.get("os_version") or device["os_version"]
+    device["enterprise"] = new_data.get("enterprise") or device["enterprise"]
+    device["vendor_class"] = new_data.get("vendor_class") or device["vendor_class"]
 
     # IPv6 地址处理
     if new_data.get("ipv6_lla"):
@@ -77,23 +99,71 @@ def process_icmpv6_na(packet):
         print(f"[ICMPv6 NA 解析错误] {e}")
 
 
+def process_icmpv6_mld(packet):
+    """处理 MLD 报告（Membership Report）"""
+    try:
+        # 检查是否为 MLD 报告（ICMPv6 Type=143）
+        if packet.haslayer(ICMPv6MLReport):
+            # 提取源 MAC 地址
+            mac = packet[Ether].src
+
+            ipv6_lla = packet[IPv6].src
+            # # 提取组播地址列表
+            # mld = packet[ICMPv6MLReport]
+            # multicast_groups = set()
+            #
+            # # 遍历组记录（MLDv2 支持多组）
+            # for record in mld.mldaddrrecords:
+            #     multicast_groups.add(record.mcastaddr)
+
+            # 更新设备信息
+            update_device_info(mac, {"ipv6_lla": ipv6_lla})
+    except Exception as e:
+        print(f"[MLD 解析错误] {e}")
+
+
+def process_icmpv6_echo_reply(packet):
+    """处理 ICMPv6 Echo Reply（Ping 回复）"""
+    try:
+        # 检查是否为 Echo Reply（Type=129）
+        if packet.haslayer(ICMPv6EchoReply):
+            # 提取源 IPv6 地址和目标 IPv6 地址
+            src_ip = packet[IPv6].src
+            dst_ip = packet[IPv6].dst
+
+            # 提取 MAC 地址（需从以太网层获取，适用于本地网络）
+            mac = packet[Ether].src
+
+            # 更新设备信息（关联 MAC 和 IPv6 地址）
+            update_device_info(mac, {
+                "ipv6_lla": src_ip if is_lla(src_ip) else None,
+                "ipv6_gua": [src_ip] if is_gua(src_ip) else [],
+            })
+    except Exception as e:
+        print(f"[ICMPv6 Echo Reply 解析错误] {e}")
+
+
 def process_netbios_browser(packet):
     """处理 NetBIOS Browser 协议 Announcement 报文"""
     try:
         # 检查是否为 Announcement 报文（Browser Election 或 Host Announcement）
-        if packet.haslayer(BRWS_HostAnnouncement):  # Host Announcement
-            # 提取源 MAC 地址
-            mac = packet[Ether].src
+        if packet.haslayer(SMB_Header):
+            smb_com = packet.getlayer(5)
+            data = smb_com.Buffer[0]
+            if data[1].haslayer(BRWS_HostAnnouncement):
+                browser = data[1].getlayer(BRWS_HostAnnouncement)
+                # 提取源 MAC 地址
+                mac = packet[Ether].src
 
-            # 提取服务器名称和域名
-            server_name = packet[BRWS_HostAnnouncement].server_name.decode('utf-8', errors='ignore').strip('\x00 ')
-            workgroup = packet[BRWS_HostAnnouncement].domain_name.decode('utf-8', errors='ignore').strip('\x00 ')
+                # 提取服务器名称和域名
+                server_name = browser.ServerName.decode('utf-8', errors='ignore').strip('\x00 ')
+                os_version = "Windows " + str(browser.OSVersionMajor) + "." + str(browser.OSVersionMinor)
 
-            # 更新设备信息
-            update_device_info(mac, {
-                "hostname": server_name,
-                "workgroup": workgroup  # 可选：新增字段记录工作组
-            })
+                # 更新设备信息
+                update_device_info(mac, {
+                    "hostname": server_name,
+                    "os_version": os_version
+                })
     except Exception as e:
         print(f"[NetBIOS Browser 解析错误] {e}")
 
@@ -145,6 +215,51 @@ def process_mdns_packet(packet):
         print(f"[mDNS 解析错误] {e}")
 
 
+def process_dhcp_packet(packet):
+    """处理 DHCPv6 请求（携带主机名、IPv4、IPv6）"""
+    try:
+        mac = packet[Ether].src
+
+        new_data = {"dhcp_name": None, "vendor_class": None}
+        for option in packet[DHCP].options:
+            if isinstance(option, tuple):
+                if option[0] == 'hostname':  # Option 12
+                    new_data["hostname"] = option[1].decode('utf-8', errors='ignore')
+                if option[0] == 'vendor_class_id':  # Option 60
+                    new_data["vendor"] = option[1].decode()
+                if option[0] == 'requested_addr':  # Option 50
+                    new_data["ip4"] = option[1]
+
+        update_device_info(mac, new_data)
+
+    except Exception as e:
+        print(f"[DHCP 解析错误] {e}")
+
+
+def process_dhcpv6_packet(packet):
+    """处理 DHCPv6 请求（携带主机名、IPv4、IPv6）"""
+    try:
+        mac = packet[Ether].src
+
+        new_data = {"dhcp_name": None, "enterprise": None, "vendor_class":None}
+        # 提取域名信息
+        if DHCP6OptClientFQDN in packet:
+            domain_name = packet[DHCP6OptClientFQDN].fqdn
+            new_data["dhcp_name"] = domain_name
+
+        # 提取Vendor Class信息
+        if DHCP6OptVendorClass in packet:
+            vendor_class = packet[DHCP6OptVendorClass]
+            new_data["enterprise"] =  IANA_ENTERPRISE_NUMBERS[vendor_class.enterprisenum]
+            for data in vendor_class.vcdata:
+                new_data["vendor_class"] = data.data.decode('utf-8')
+
+        update_device_info(mac, new_data)
+
+    except Exception as e:
+        print(f"[DHCPv6 解析错误] {e}")
+
+
 # ========================== 主流程 ==========================
 def process_packet(packet):
     """统一处理数据包分发"""
@@ -155,6 +270,14 @@ def process_packet(packet):
             process_mdns_packet(packet)
         elif packet.haslayer(NBNSRegistrationRequest):
             process_nbns_packet(packet)
+        elif packet.haslayer(ICMPv6MLReport):
+            process_icmpv6_mld(packet)
+        elif packet.haslayer(ICMPv6EchoReply):
+            process_icmpv6_echo_reply(packet)
+        elif packet.haslayer(DHCP6_Solicit) or packet.haslayer(DHCP6_InfoRequest):
+            process_dhcpv6_packet(packet)
+        elif packet.haslayer(DHCP):
+            process_dhcp_packet(packet)
     except Exception as e:
         print(f"[数据包处理异常] {e}")
 
