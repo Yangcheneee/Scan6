@@ -45,7 +45,7 @@ def run(save_file="result/smb_pcap.csv"):
     df = pd.DataFrame(smb_info_list)
     df = df.drop_duplicates()
     # 按MAC列去重
-    # df_unique_mac = df_unique.drop_duplicates(subset=['mac'], keep='last')
+    df = df.drop_duplicates(subset=['mac'], keep='last')
     # 按转换后的整数值排序
     df['ip_int'] = df['ip4'].apply(ip_to_int)
     df = df.sort_values('ip_int')

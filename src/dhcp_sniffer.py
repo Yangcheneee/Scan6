@@ -2,8 +2,7 @@ from scapy.all import *
 from scapy.layers.dhcp import DHCP, BOOTP
 from scapy.layers.l2 import Ether
 import pandas as pd
-from datetime import datetime
-import name_resolver
+from src import name_resolver
 
 info_list = []
 

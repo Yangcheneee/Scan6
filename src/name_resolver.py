@@ -6,8 +6,7 @@ from scapy.layers.dns import DNS, DNSQR, DNSRR
 from scapy.layers.inet import UDP, IP
 from scapy.layers.l2 import Ether
 from scapy.sendrecv import srp1
-import conf
-
+from src import conf
 
 mdns_mac = "01:00:5E:00:00:FB"
 mdns_ip = "224.0.0.251"

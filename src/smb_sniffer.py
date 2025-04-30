@@ -2,9 +2,8 @@ from scapy.all import *
 import pandas as pd
 from scapy.layers.inet import UDP, IP
 from scapy.layers.l2 import Ether
-from scapy.layers.netbios import NBTSession, NetBIOS_DS, NBNSHeader
-from scapy.layers.smb import BRWS_HostAnnouncement, SMB_Header, SMBTransaction_Request
-import name_resolver
+from scapy.layers.smb import BRWS_HostAnnouncement, SMB_Header
+from src import name_resolver
 
 info_list = []
 

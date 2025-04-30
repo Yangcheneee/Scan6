@@ -1,9 +1,5 @@
 import multiprocessing
-import HScan6_quick
-import smb_scan
-import dhcp_sniffer
-import smb_sniffer
-import mdns_sniffer
+from src import smb_scan, HScan6_quick
 
 
 def quick_scan():
@@ -26,8 +22,8 @@ if __name__ == "__main__":
     """
     save_path参数是保存的路径，程序将会根据当前时间生成文件名
     """
-    HScan6_quick.run(target="172.31.99.0/24", save_path="../result/mdns_scan/")
     smb_scan.run(target="172.31.99.255", save_path="../result/smb_scan/")
+    HScan6_quick.run(target="172.31.99.0/24", save_path="../result/mdns_scan/")
 
     """
     save_file参数是保存的文件，程序将会以追加的方式写入文件

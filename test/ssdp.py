@@ -31,6 +31,7 @@ def send_ssdp_discovery():
     if p:
         p.show()
 
+
 # 监听SSDP响应
 def listen_ssdp_responses(timeout=5):
     print("[*] Listening for SSDP responses...")

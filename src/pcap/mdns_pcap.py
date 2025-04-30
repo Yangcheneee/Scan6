@@ -75,7 +75,8 @@ def handle_mdns_packet(packet):
                                 info["gua"] = ip
                             else:
                                 info["tua"] = ip
-                if info["hostname"] and info["lla"] and info["gua"] and info["ip4"]:
+                # if info["hostname"] and info["lla"] and info["gua"] and info["ip4"]:
+                if True:
                     info["mac"] = packet[Ether].src
                     # print(info)
                     return info
@@ -83,9 +84,9 @@ def handle_mdns_packet(packet):
         print(f"解析数据包时发生错误: {e}")
 
 
-def run(save_file="result/mdns_pcap.csv"):
+def run(pcap_path='data/mdns.pcapng', save_file="result/mdns_pcap.csv"):
     mdns_info_list = []
-    packets = rdpcap('data/mdns.pcapng')
+    packets = rdpcap(pcap_path)
     for pkt in packets:
         mdns_info = handle_mdns_packet(pkt)
         if mdns_info:
@@ -94,12 +95,12 @@ def run(save_file="result/mdns_pcap.csv"):
         df = pd.DataFrame(mdns_info_list)
         # 去除完全重复的行（所有列值相同）
         df = df.drop_duplicates()
-        df = df.drop_duplicates(subset=['mac', 'ip4', 'hostname', 'lla', 'gua'], keep='last')
+        # df = df.drop_duplicates(subset=['mac', 'ip4', 'hostname', 'lla', 'gua'], keep='last')
         # 按转换后的整数值排序
-        df['ip_int'] = df['ip4'].apply(ip_to_int)
-        df = df.sort_values('ip_int')
+        # df['ip_int'] = df['ip4'].apply(ip_to_int)
+        # df = df.sort_values('ip_int')
         # 删除临时列（可选）
-        df = df.drop('ip_int', axis=1)
+        # df = df.drop('ip_int', axis=1)
         df.to_csv(save_file, index=False, header=not os.path.exists(save_file), mode='a')
         print(f"数据已保存到 {save_file}")
     else:
@@ -107,4 +108,5 @@ def run(save_file="result/mdns_pcap.csv"):
 
 
 if __name__ == "__main__":
-    run()
+    run("data/school_mdns.pcapng", "result/shool_mdns_pcap.csv")
+

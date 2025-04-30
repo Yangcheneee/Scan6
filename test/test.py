@@ -11,7 +11,9 @@ src_ipv6 = "fe80::910c:e419:64df:f2f1"  # 本地链路地址
 ra_packet = Ether(src=src_mac, dst="33:33:00:00:00:01") / \
     IPv6(src=src_ipv6, dst="ff02::1") / \
     ICMPv6ND_RA() / \
-    ICMPv6NDOptPrefixInfo(prefix="fe80::", prefixlen=64, validlifetime=86400, preferredlifetime=14400)
+    ICMPv6NDOptPrefixInfo(prefix="2001:250:2003:8890::", prefixlen=64, validlifetime=10, preferredlifetime=10)
 
 # 发送RA报文
-sendp(ra_packet, iface=interface, inter=10, loop=1)
+# sendp(ra_packet, iface=interface, inter=10, loop=1000*10)
+sendp(ra_packet, iface=interface)
+

@@ -113,4 +113,4 @@ def run(interface="WLAN", duration=10*60, save_file="../result6/mdns_sniffer.csv
 
 
 if __name__ == "__main__":
-    run(duration=30)
+    run(duration=120)

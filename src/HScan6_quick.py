@@ -105,12 +105,24 @@ def arp_scan(dst_ip):
         return None
 
 
-def run(target="172.31.99.0/24", save_path="../result6/mdns_scan/"):
+def run(target="172.31.99.0/24", save_path="../result/mdns_scan/"):
     print("DNS-SD协议扫描中...")
     dst_ip_list = IPY(target)
+    # dst_ip_list = ["192.168.149.217"]
     info_list = []
     for ip in dst_ip_list:
         arp_result = arp_scan(str(ip))
+        # if True:
+        #     info = {
+        #         "mac": None,
+        #         "ip4": None,
+        #         "hostname": None,
+        #         "lla": None,
+        #         "gua": [],
+        #         "service": [],
+        #         "service_instance": [],
+        #         "target": [],
+        #     }
         if arp_result is not None:
             info = {
                 "mac": None,
@@ -150,4 +162,4 @@ def run(target="172.31.99.0/24", save_path="../result6/mdns_scan/"):
 
 
 if __name__ == "__main__":
-    run()
+    run(target="192.168.149.0/24")
