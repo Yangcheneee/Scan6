@@ -7,6 +7,8 @@ import pandas as pd
 from scapy.all import sniff
 from scapy.layers.dns import DNS, DNSRR
 from scapy.layers.netbios import NBNSQueryRequest, NBNSRegistrationRequest
+from scapy.layers.netbios import NBTDatagram
+from scapy.layers.smb import BRWS_HostAnnouncement
 
 sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 
@@ -48,6 +50,7 @@ def update_device_info(mac: str, new_data: dict):
     # 合并策略
     device["hostname"] = new_data.get("hostname") or device["hostname"]
     device["ipv4"] = new_data.get("ipv4") or device["ipv4"]
+    device["nbns_name"] = new_data.get("nbns_name") or device["nbns_name"]
 
     # IPv6 地址处理
     if new_data.get("ipv6_lla"):
@@ -74,21 +77,41 @@ def process_icmpv6_na(packet):
         print(f"[ICMPv6 NA 解析错误] {e}")
 
 
+def process_netbios_browser(packet):
+    """处理 NetBIOS Browser 协议 Announcement 报文"""
+    try:
+        # 检查是否为 Announcement 报文（Browser Election 或 Host Announcement）
+        if packet.haslayer(BRWS_HostAnnouncement):  # Host Announcement
+            # 提取源 MAC 地址
+            mac = packet[Ether].src
+
+            # 提取服务器名称和域名
+            server_name = packet[BRWS_HostAnnouncement].server_name.decode('utf-8', errors='ignore').strip('\x00 ')
+            workgroup = packet[BRWS_HostAnnouncement].domain_name.decode('utf-8', errors='ignore').strip('\x00 ')
+
+            # 更新设备信息
+            update_device_info(mac, {
+                "hostname": server_name,
+                "workgroup": workgroup  # 可选：新增字段记录工作组
+            })
+    except Exception as e:
+        print(f"[NetBIOS Browser 解析错误] {e}")
+
+
 def process_nbns_packet(packet):
     """处理 NBNS 协议（NetBIOS 名称服务）"""
     try:
         # 仅处理 NBNS 注册请求（Opcode=5 为注册请求）
-        nbns_name = packet[NBNSRegistrationRequest].QUESTION_NAME
-        hostname = nbns_name
-        print(nbns_name)
-        # hostname = decode_netbios_name(nbns_name)
+        nbns_name = packet[NBNSRegistrationRequest].QUESTION_NAME.decode('utf-8').strip(' ')
+        if nbns_name == "WORKGROUP":
+            return
 
         # 获取 MAC 地址（NBNS 在 IPv4 层，需从以太网层取 MAC）
         mac = packet[Ether].src
 
         # 更新设备信息
-        if hostname:
-            update_device_info(mac, {"nbns_info": hostname})
+        if nbns_name:
+            update_device_info(mac, {"nbns_name": nbns_name})
     except Exception as e:
         print(f"[NBNS 解析错误] {e}")
 
@@ -143,7 +166,7 @@ def run(interface="WLAN", duration=600, save_path="result"):
         sniff(
             iface=interface,
             prn=process_packet,
-            filter="icmp6 or udp port 5353 or 137",  # mDNS 和 ICMPv6
+            filter="icmp6 or udp port 5353 or 137 or 138",  # mDNS 和 ICMPv6
             timeout=duration,
             store=0
         )
@@ -154,7 +177,7 @@ def run(interface="WLAN", duration=600, save_path="result"):
         if GLOBAL_DEVICES:
             df = pd.DataFrame(GLOBAL_DEVICES.values())
             print(df)
-            df = df[["mac", "hostname", "ipv4", "ipv6_lla", "ipv6_gua", "first_seen", "last_seen"]]
+            df = df[["mac", "nbns_name", "hostname", "ipv4", "ipv6_lla", "ipv6_gua", "first_seen", "last_seen"]]
 
             # 生成文件名
             os.makedirs(save_path, exist_ok=True)
