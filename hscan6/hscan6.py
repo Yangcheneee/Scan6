@@ -114,20 +114,7 @@ def async_arp_scan(ip_list):
     return results
 
 
-def get_service_list(dst_ip):
-    # DNS Services Discovery: _services._dns-sd._udp.local
-    mdns_layer = DNS(id=0x0000, rd=1, qd=DNSQR(qtype="PTR", unicastresponse=1, qname='_services._dns-sd._udp.local'))
-    trans_layer = UDP(sport=5353, dport=5353)
-    ip_layer = IP(dst=dst_ip)
-    packet = ip_layer/trans_layer/mdns_layer
-    response = sr1(packet, verbose=0, timeout=1)
-    if response:
-        return extract_service(response)
-    else:
-        return None
-
-
-def batch_service_discovery(interface="WLAN",src_mac, src_ip, dst, timeout=2):
+def batch_service_discovery(interface, src_mac, src_ip, dst):
     packets = []
     for dst_mac, dst_ip in dst:
         packet = (
@@ -147,48 +134,26 @@ def batch_service_discovery(interface="WLAN",src_mac, src_ip, dst, timeout=2):
         packets.append(packet)
 
     # 批量发送并接收响应
-    ans, unans = srp(packets, timeout=timeout, iface=interface, verbose=0)
+    ans, unans = srp(packets, timeout=2, iface=interface, verbose=0)
 
     # 解析结果
     results = {}
     for sent_pkt, recv_pkt in ans:
         if recv_pkt.haslayer(DNS):
             mac = recv_pkt[Ether].src
-            services = extract_service(recv_pkt)
-            results[mac] = services
+            ipv4 = recv_pkt[IP].src
+            dns = recv_pkt[DNS]
+            for answer in dns.an:
+                if answer.type == 12:
+                    service_name = answer.rdata.decode('utf-8').rstrip('.')
+                    results[mac]["service"].append(service_name)
+                    results[mac]["ipv4"] = ipv4
+                    results[mac]["mac"] =mac
 
     return results
 
 
-def extract_service(packet):
-    service_list = []
-    try:
-        dns = packet[DNS]
-        # 检查授权记录部分（NS记录区）
-        for answer in dns.ns:
-            if answer.type == 12:  # PTR记录
-                service_name = answer.rdata.decode('utf-8').rstrip('.')
-                if (
-                        answer.rrname.decode('utf-8').lower() == "_services._dns-sd._udp.local."
-                        and service_name not in service_list
-                ):
-                    service_list.append(service_name)
-
-        # 如果没有在NS记录中找到，尝试AN记录
-        if not service_list:
-            for answer in dns.an:
-                if answer.type == 12:
-                    service_name = answer.rdata.decode('utf-8').rstrip('.')
-                    if service_name not in service_list:
-                        service_list.append(service_name)
-
-        return service_list if service_list else None
-    except Exception as e:
-        print("{e")
-        return None
-
-
-def batch_get_service_info(interface, src_mac, src_ip, dst, iface=None, timeout=2):
+def batch_get_service_info(interface, src_mac, src_ip, dst):
     packets = []
     for dst_mac, dst_ip, services in dst:
         pkt = (
@@ -196,23 +161,42 @@ def batch_get_service_info(interface, src_mac, src_ip, dst, iface=None, timeout=
                 IP(src=src_ip, dst=dst_ip, ttl=255) /
                 UDP(sport=5353, dport=5353) /
                 DNS(
-                    rd=1,
+                    rd=0,
                     qd=[DNSQR(qtype="PTR", unicastresponse=1, qname=service) for service in services]
                 )
+        )
         packets.append(pkt)
 
     # 批量发送
-    ans, unans = srp(packets, timeout=timeout, iface=interface, verbose=0)
+    ans, unans = srp(packets, timeout=2, iface=interface, verbose=0)
 
     # 解析结果
     results = {}
     for sent, recv in ans:
-        try:
-            if recv.haslayer(DNS):
-                info = batch_extract_info(recv, service)
-                results[dst_ip][service] = info
-        except KeyError:
-            continue
+        if recv.haslayer(DNS):
+            dns = recv[DNS]
+            # 解析附加记录 (Additional Records)
+            mac = recv[Ether].src
+            result = {}
+            for rr in dns.ar:
+                if rr.type == 33:  # SRV
+                    instance = rr.rrname.decode().rstrip('.')
+                    result[mac]["service_instance"].append(instance)
+                    hostname = rr.target.decode().rstrip('.')
+                    port = rr.port
+                    result[mac]["target"].append(f"{hostname}:{port}")
+                if rr.type == 1:  # A
+                    result[mac] = rr.rrname.decode('utf-8').rstrip('.')
+                # AAAA记录处理
+                elif rr.type == 28:  # AAAA
+                    ip6 = rr.rdata
+                    if is_lla(ip6):
+                        result[mac]["ipv6_lla"] = ip6
+                    elif is_gua(ip6):
+                        result[mac]["ipv6_gua"].append(ip6)
+                    # 关联主机名
+                    hostname = rr.rrname.decode().rstrip('.')
+                    result[mac]["hostname"] = hostname
 
     return results
 
@@ -258,14 +242,25 @@ def run(interface="WLAN", target="172.31.99.0/24", save_path="D:/Project/Scan6/r
     ip_list = [str(ip) for ip in IPY(target)]
     mac_ipv4_list = async_arp_scan(ip_list)
     service_dict = batch_service_discovery(interface, conf.mac, conf.ipv4, mac_ipv4_list)
-    service_info_dict = batch_get_service_info(interface, conf.mac, conf.ipv4, mac_ipv4_list, service_dict)
+    dst = list(service_dict.values())
+    service_info_dict = batch_get_service_info(interface, conf.mac, conf.ipv4, dst)
     info_list = []
+    for mac, ipv4 in mac_ipv4_list:
+        info = {
+            "mac": mac,
+            "ipv4": ipv4,
+            "hostname": service_info_dict.get(mac, {}).get("hostname"),
+            "service": service_dict.get(mac, {}).get("service"),
+            "service_instance": service_info_dict.get(mac, {}).get("service_instance"),
+            "target": service_info_dict.get(mac, {}).get("target")
+        }
+        print(info)
     if info_list:
         df = pd.DataFrame(info_list)
         save_file = save_path + datetime.now().strftime("%Y-%m-%d %H-%M-%S")
-        df.to_csv(save_file, index=False, mode='a')
+        df.to_csv(save_file, index=False)
         print(f"数据已保存到 {save_file}")
 
 
 if __name__ == "__main__":
-    run(target="192.168.149.0/24", save_path="../result/mdns_scan/")
+    run(target="192.168.182.0/24", save_path="D:/Project/Scan6/result/hscan6/")
