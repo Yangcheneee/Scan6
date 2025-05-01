@@ -1,223 +1,271 @@
-import sys
-
-from scapy.layers.l2 import ARP
-
-sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
+import random
+import socket
+from datetime import datetime
+import netifaces
+import pandas as pd
 from scapy.layers.dns import DNS, DNSQR, DNSRR
+from scapy.layers.l2 import ARP
 from scapy.layers.inet import IP, UDP
-from scapy.sendrecv import sr1
+from scapy.sendrecv import sr1, send, srp1, srp
 from IPy import IP as IPY
-from tqdm import tqdm
+from scapy.layers.l2 import ARP, Ether
+
+# mDNS多播地址配置
+MDNS_MAC = "01:00:5e:00:00:fb"  # IPv4 mDNS多播MAC
+MDNS_IP = "224.0.0.251"  # IPv4 mDNS地址
+LLA_PREFIX = ["fe80:"]
+GUA_PREFIX = ["2", "3"]
+INTERFACE_ID = {
+    "ETH": "{E9812809-EC44-4F9B-AA3F-A4EDF0835213}",
+    "WLAN": "{F52FC252-BAEC-4BA6-A8CA-8706641245A6}"
+}
+SERVICE_TYPE_ENUMERATION = "_service._dns-sd._udp.local."
 
 
-def is_lla_ipv6(ip):
-    if ip.startswith("fe80:"):
-        return True
+# local link address
+def is_lla(ip):
+    return ip.startswith(("fe8", "fe9", "fea", "feb"))
 
 
-# unicast address
-def is_gua_ipv6(ip):
-    if ip.startswith("2"):
-        return True
+# global unicast address
+def is_gua(ip):
+    return ip.startswith(("2", "3"))
 
 
-def extract_ip6(packet):
-    lla_list = []
-    gua_list = []
-    if packet.haslayer(DNSRR):
-        dns = packet.getlayer(DNS)
-        # dns.show()
-        # 检查是否有响应记录
-        if dns.qr == 1:  # QR=1表示响应
-            # print("response!")
-            for answer in dns.an:
-                if isinstance(answer, DNSRR) and answer.type == 28:  # AAAA
-                    # answer.show()
-                    ip6 = answer.rdata
-                    if is_lla_ipv6(ip6):
-                        lla_list.append(ip6)
-                    if is_gua_ipv6(ip6):
-                        gua_list.append(ip6)
-    return lla_list, gua_list
+class Conf:
+    hostname = "DESKTOP-8DUN5OR"
+    interface = "WLAN"
+    mac = "48:a4:72:e6:72:bf"
+    ipv4 = "172.31.99.79"
+    ipv6_lla = "fe80::910c:e419:64df:f2f1"
+    ipv6_gua = ["2001:250:2003:8890:e4ba:2bc9:db45:472e"]
+
+    def __init__(self, interface):
+        """
+        获取指定网卡的网络配置信息
+        :param interface: 网卡名称，如'eth0'、'ens33'、'wlan0'等
+        :return: 包含网络配置的字典
+        """
+
+        if interface not in netifaces.interfaces():
+            raise ValueError(f"Interface {interface} not found")
+
+        info = {}
+
+        hostname = socket.gethostname()
+        self.hostname = hostname
+        info.update({
+            "hostname": hostname
+        })
+
+        addrs = netifaces.ifaddresses(interface)
+
+        # MAC地址 (AF_LINK)
+        if netifaces.AF_LINK in addrs:
+            info['mac'] = addrs[netifaces.AF_LINK][0]['addr']
+            self.mac = info['mac']
+
+        # IPv4信息 (AF_INET)
+        if netifaces.AF_INET in addrs:
+            ipv4 = addrs[netifaces.AF_INET][0]
+            info.update({
+                'ipv4': ipv4.get('addr'),
+                'netmask': ipv4.get('netmask'),
+                'broadcast': ipv4.get('broadcast')
+            })
+            self.ipv4 = info['ipv4']
+
+        # IPv6信息 (AF_INET6)
+        if netifaces.AF_INET6 in addrs:
+            ipv6_list = addrs[netifaces.AF_INET6]
+            for ipv6 in ipv6_list:
+                ipv6_addr = ipv6.get('addr')
+                if is_lla(ipv6_addr):
+                    info.update({
+                        "ipv6_lla":  ipv6_addr,
+                    })
+                elif is_gua(ipv6_addr):
+                    if "ipv6_gua" not in info:
+                        info.update({
+                            "ipv6_gua": []
+                        })
+                    info["ipv6_gua"].append(ipv6_addr)
+            self.ipv6_lla = info['ipv6_lla']
+            self.ipv6_gua = info['ipv6_gua']
+
+        # 网关信息
+        gateways = netifaces.gateways()
+        info['default_gateway'] = gateways.get('default', {}).get(netifaces.AF_INET, (None, None))[0]
 
 
-def extract_target(packet):
-    target_list = []
-    if packet.haslayer(DNSRR):
-        dns = packet.getlayer(DNS)
-        # dns.show()
-        # 检查是否有响应记录
-        if dns.qr == 1:  # QR=1表示响应
-            # print("response!")
-            for answer in dns.an:
-                # answer.show()
-                if answer.type == 33:  # SRV
-                    # answer.show()
-                    hostname = answer.target.decode('utf-8')
-                    port = answer.port
-                    target = hostname + str(port)
-                    target_list.append(target)
-    return target_list
+def async_arp_scan(ip_list):
+    # 创建ARP请求包列表
+    arp_packets = [Ether(dst="ff:ff:ff:ff:ff:ff")/ARP(pdst=ip) for ip in ip_list]
+    # 发送并接收响应，超时设为2秒
+    ans, unans = srp(arp_packets, timeout=2, verbose=False)
+    # 处理响应
+    results = []
+    for sent_packet, received_packet in ans:
+        if received_packet.haslayer(ARP) and received_packet[ARP].op == 2:
+            src_mac = received_packet[ARP].hwsrc
+            src_ip = received_packet[ARP].psrc
+            results.append((src_mac, src_ip))
 
-
-def extract_service_instance(packet):
-    service_instance_list = []
-    # packet.show()
-    if packet.haslayer(DNSRR):
-        # packet.show()
-        dns = packet.getlayer(DNS)
-        for answer in dns.an:
-            # answer.show()
-            if answer.type == 12:
-                if answer.rdata.decode('utf-8') not in service_instance_list and answer.rrname.decode(
-                        'utf-8') != "_services._dns-sd._udp.local.":
-                    service_instance_list.append(answer.rdata.decode('utf-8'))
-    return service_instance_list
-
-
-def extract_service(packet):
-    service_list = []
-    # packet.show()
-    if packet.haslayer(DNSRR):
-        # packet.show()
-        dns = packet.getlayer(DNS)
-        for answer in dns.an:
-            # answer.show()
-            if answer.type == 12:
-                #  == "_services._dns-sd._udp.local"
-                # print(answer.rrname.decode('utf-8'))
-                if answer.rdata.decode('utf-8') not in service_list and answer.rrname.decode(
-                        'utf-8') == "_services._dns-sd._udp.local.":
-                    service_list.append(answer.rdata.decode('utf-8'))
-                    # print(service_list)
-    return service_list
+    return results
 
 
 def get_service_list(dst_ip):
     # DNS Services Discovery: _services._dns-sd._udp.local
     mdns_layer = DNS(id=0x0000, rd=1, qd=DNSQR(qtype="PTR", unicastresponse=1, qname='_services._dns-sd._udp.local'))
     trans_layer = UDP(sport=5353, dport=5353)
-    # 注意这个地方源端口不能为5353
     ip_layer = IP(dst=dst_ip)
-    # 注意这个地方dst_ip必须是mDNS组播IP
     packet = ip_layer/trans_layer/mdns_layer
-    # packet.show()
     response = sr1(packet, verbose=0, timeout=1)
     if response:
-        service_list = extract_service(response)
-        return service_list
+        return extract_service(response)
     else:
         return None
 
 
-def get_service_instance_list(service_list, dst_ip):
-    # 创建DNS查询记录列表
-    dns_qr_list = [DNSQR(qtype="PTR", unicastresponse=1, qname=service) for service in service_list]
-    # 创建mDNS层
-    mdns_layer = DNS(id=0x0000, rd=1, qd=dns_qr_list)
-    # DNS Services Discovery: _services._dns-sd._udp.local
-    trans_layer = UDP(sport=5353, dport=5353)
-    # 注意这个地方源端口不能为5353
-    ip_layer = IP(dst=dst_ip, ttl=255)
-    packet = ip_layer/trans_layer/mdns_layer
-    # packet.show()
-    response = sr1(packet, verbose=0, timeout=0.5)
-    if response:
-        # response.show()
-        service_instance_list = extract_service_instance(response)
-        return service_instance_list
-    else:
+def batch_service_discovery(interface="WLAN",src_mac, src_ip, dst, timeout=2):
+    packets = []
+    for dst_mac, dst_ip in dst:
+        packet = (
+                Ether(src=src_mac, dst=dst_mac) /
+                IP(src=src_ip, dst=dst_ip, ttl=255) /
+                UDP(sport=5353, dport=5353) /
+                DNS(
+                    id=0x0000,
+                    rd=0,
+                    qd=DNSQR(
+                        qtype="PTR",
+                        qname=SERVICE_TYPE_ENUMERATION,
+                        unicastresponse=1
+                    )
+                )
+        )
+        packets.append(packet)
+
+    # 批量发送并接收响应
+    ans, unans = srp(packets, timeout=timeout, iface=interface, verbose=0)
+
+    # 解析结果
+    results = {}
+    for sent_pkt, recv_pkt in ans:
+        if recv_pkt.haslayer(DNS):
+            mac = recv_pkt[Ether].src
+            services = extract_service(recv_pkt)
+            results[mac] = services
+
+    return results
+
+
+def extract_service(packet):
+    service_list = []
+    try:
+        dns = packet[DNS]
+        # 检查授权记录部分（NS记录区）
+        for answer in dns.ns:
+            if answer.type == 12:  # PTR记录
+                service_name = answer.rdata.decode('utf-8').rstrip('.')
+                if (
+                        answer.rrname.decode('utf-8').lower() == "_services._dns-sd._udp.local."
+                        and service_name not in service_list
+                ):
+                    service_list.append(service_name)
+
+        # 如果没有在NS记录中找到，尝试AN记录
+        if not service_list:
+            for answer in dns.an:
+                if answer.type == 12:
+                    service_name = answer.rdata.decode('utf-8').rstrip('.')
+                    if service_name not in service_list:
+                        service_list.append(service_name)
+
+        return service_list if service_list else None
+    except Exception as e:
+        print("{e")
         return None
 
 
-def get_target(service_instance_list, dst_ip):
-    # 创建DNS查询记录列表，查询类型为SRV
-    dns_qr_list = [DNSQR(qtype="SRV", unicastresponse=1, qname=service_instance) for service_instance in service_instance_list]
-    # 创建mDNS层
-    mdns_layer = DNS(id=0x0000, rd=1, qd=dns_qr_list)
-    # 创建UDP层，源端口不为5353，目标端口为5353
-    trans_layer = UDP(sport=5353, dport=5353)  # 源端口设置为5354，确保不为5353
-    # 创建IP层
-    ip_layer = IP(dst=dst_ip, ttl=255)
-    # 组装报文
-    packet = ip_layer / trans_layer / mdns_layer
-    # 发送报文并接收响应
-    response = sr1(packet, verbose=0, timeout=0.5)
-    if response:
-        # 解析响应中的服务实例
-        target_list = extract_target(response)
-        return target_list
-    else:
-        return None
+def batch_get_service_info(interface, src_mac, src_ip, dst, iface=None, timeout=2):
+    packets = []
+    for dst_mac, dst_ip, services in dst:
+        pkt = (
+                Ether(src=src_mac, dst=dst_mac) /
+                IP(src=src_ip, dst=dst_ip, ttl=255) /
+                UDP(sport=5353, dport=5353) /
+                DNS(
+                    rd=1,
+                    qd=[DNSQR(qtype="PTR", unicastresponse=1, qname=service) for service in services]
+                )
+        packets.append(pkt)
+
+    # 批量发送
+    ans, unans = srp(packets, timeout=timeout, iface=interface, verbose=0)
+
+    # 解析结果
+    results = {}
+    for sent, recv in ans:
+        try:
+            if recv.haslayer(DNS):
+                info = batch_extract_info(recv, service)
+                results[dst_ip][service] = info
+        except KeyError:
+            continue
+
+    return results
 
 
-def mdns(name, dst_ip):
-    # query all service name
-    ip_layer = IP(dst=dst_ip)
-    trans_layer = UDP(sport=5353, dport=5353)
-    mdns_layer = DNS(rd=1, qd=DNSQR(qtype="AAAA", unicastresponse=1, qname=name))
-    packet = ip_layer/trans_layer/mdns_layer
-    response = sr1(packet, verbose=0,  timeout=0.5)
-    if response:
-        ipv6_list = extract_ip6(response)
-        return ipv6_list
-    else:
-        return None
+def batch_extract_info(packet):
+    dns = packet[DNS]
+    # 解析附加记录 (Additional Records)
+    mac = packet[Ether].src
+    result = {}
+    for rr in dns.ar:
+        if rr.type == 33:  # SRV
+            instance = rr.rrname.decode().rstrip('.')
+            result[mac].append(instance)
+
+            hostname = rr.target.decode().rstrip('.')
+            port = rr.port
+            result[mac].append(f"{hostname}:{port}")
+        if rr.type == 1:  # A
+            result[mac] = rr.rrname.decode('utf-8').rstrip('.')
+        # AAAA记录处理
+        elif rr.type == 28:  # AAAA
+            ip6 = rr.rdata
+            if is_lla(ip6):
+                result[mac] = ip6
+            elif is_gua(ip6):
+                result[mac].append(ip6)
+            # 关联主机名
+            hostname = rr.rrname.decode().rstrip('.')
+            if not result["hostname"]:
+                result["hostname"] = hostname
+
+    # 处理回答记录 (Answer Section)
+    for rr in dns.an:
+        if rr.type == 12:  # PTR
+            instance = rr.rdata.decode().rstrip('.')
+            result[mac].append(instance)
+
+    return result
 
 
-def is_alive(dst_ip):
-    pkt = ARP(pdst=dst_ip)
-    ans = sr1(pkt, timeout=0.5, verbose=False)
-    if ans is not None:
-        if ans.haslayer(ARP) and ans[ARP].op == 2:
-            src_mac = ans[ARP].hwsrc
-            src_ip = ans[ARP].psrc
-            return src_mac, src_ip
-        else:
-            return None
-    else:
-        return None
+def run(interface="WLAN", target="172.31.99.0/24", save_path="D:/Project/Scan6/result/hscan6/"):
+    conf = Conf(INTERFACE_ID[interface])
+    ip_list = [str(ip) for ip in IPY(target)]
+    mac_ipv4_list = async_arp_scan(ip_list)
+    service_dict = batch_service_discovery(interface, conf.mac, conf.ipv4, mac_ipv4_list)
+    service_info_dict = batch_get_service_info(interface, conf.mac, conf.ipv4, mac_ipv4_list, service_dict)
+    info_list = []
+    if info_list:
+        df = pd.DataFrame(info_list)
+        save_file = save_path + datetime.now().strftime("%Y-%m-%d %H-%M-%S")
+        df.to_csv(save_file, index=False, mode='a')
+        print(f"数据已保存到 {save_file}")
 
 
 if __name__ == "__main__":
-    info_list = []
-    dst_ip_list = IPY("172.31.99.0/24")
-    # dst_ip_list = ["172.31.99.130"]
-    for ip in dst_ip_list:
-        # print(f"{ip} scaning...")
-        arp_result = is_alive(str(ip))
-        if arp_result is not None:
-            info = {
-                "mac": [],
-                "ip4": [],
-                "hostname": [],
-                "lla": [],
-                "gua": [],
-                "service": [],
-                "service_instance": [],
-                "target": [],
-            }
-            mac, ip4 = arp_result
-            info["mac"].append(mac)
-            info["ip4"].append(ip4)
-            service_list = get_service_list(str(ip))
-            if service_list:
-                # print(service_list)
-                info["service"] = service_list
-                service_instance_list = get_service_instance_list(service_list, str(ip))
-                if service_instance_list:
-                    info["service_instance"] = service_instance_list
-                    # print(service_instance_list)
-                    target_list = get_target(service_instance_list, str(ip))
-                    if target_list:
-                        # print(target_list)
-                        info["target"] = target_list
-                        hostname = (target_list[0]).rsplit(".", 1)[0]
-                        info["hostname"] = hostname
-                        # print(hostname)
-                        ipv6_list = mdns(hostname, str(ip))
-                        if ipv6_list:
-                            # print(ipv6_list)
-                            info["lla"].append(ipv6_list[0])
-                            info["gua"].append(ipv6_list[1])
-            print(info)
+    run(target="192.168.149.0/24", save_path="../result/mdns_scan/")

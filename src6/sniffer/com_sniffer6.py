@@ -286,7 +286,7 @@ def process_packet(packet):
         print(f"[数据包处理异常] {e}")
 
 
-def run(interface="WLAN", duration=12*60, save_path="result"):
+def run(interface="WLAN", duration=12*60, save_path="D:/Project/Scan6/result/comscan6"):
     filter_str = "icmp6 or udp port 5353 or 137 or 138 or 67 or 68 or 546 or 547"
     """主捕获循环"""
     try:
