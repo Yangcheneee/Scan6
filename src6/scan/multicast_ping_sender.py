@@ -26,12 +26,7 @@ def m_ping():
         # 将各层封装为数据包
         query = ether_layer/ip_layer/icmpv6_ping
         # packet.show()
-        response = srp(query, verbose=1, iface="WLAN", timeout=3)
-        if response:
-            for re in response:
-                re.summary()
-        print("ICMPv6  Message sent.")
-        time.sleep(2)
+        response = sendp(query, verbose=1, iface="WLAN")
 
 
 if __name__ == "__main__":

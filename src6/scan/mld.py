@@ -6,10 +6,10 @@ from scapy.layers.l2 import Ether
 # 定义MLD查询数据包
 def create_mld_query():
     # Ether头部
-    ether = Ether(src=conf.mac)
+    ether = Ether(src="48:a4:72:e6:72:bf")
 
     # IPv6头部
-    ipv6 = IPv6(src=conf.lla, dst="ff02::1", nh=0, hlim=1)  # 源地址为::，目的地址为ff02::1（所有节点多播地址）
+    ipv6 = IPv6(src="fe80::910c:e419:64df:f2f1", dst="ff02::1", nh=0, hlim=1)  # 源地址为::，目的地址为ff02::1（所有节点多播地址）
 
     # 逐跳选项扩展头
     hopbyhop = Raw(b'\x3a\x00\x05\x02\x00\x00\x01\x00')

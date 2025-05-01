@@ -19,7 +19,7 @@ sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
 # ========================== 全局配置 ==========================
 GLOBAL_DEVICES = {}  # 核心数据结构: {mac: device_info}
 LLA_PREFIX = ("fe80::", "fe80:")  # 链路本地地址前缀
-GUA_PREFIX = ("2001:", "2000:")  # 全局单播地址前缀 (按需扩展)
+GUA_PREFIX = ("2", "3")  # 全局单播地址前缀 (按需扩展)
 IANA_ENTERPRISE_NUMBERS = {
     9: "ciscoSystems",
     35: "Nortel Networks",
@@ -32,6 +32,7 @@ IANA_ENTERPRISE_NUMBERS = {
     11129: "Google, Inc",
     16885: "Nortel Networks",
 }
+
 
 # ========================== 工具函数 ==========================
 def is_lla(ip: str) -> bool:
@@ -53,6 +54,7 @@ def update_device_info(mac: str, new_data: dict):
             "os_version": None,
             "llmnr_name": None,
             "hostname": None,
+            "dhcp_name": None,
             "enterprise": None,
             "vendor_class": None,
             "ipv4": None,
@@ -69,7 +71,7 @@ def update_device_info(mac: str, new_data: dict):
     device["hostname"] = new_data.get("hostname") or device["hostname"]
     device["ipv4"] = new_data.get("ipv4") or device["ipv4"]
     device["nbns_name"] = new_data.get("nbns_name") or device["nbns_name"]
-    device["dhcp_name"] = new_data.get("dhcp_name") or device["dhccp_name"]
+    device["dhcp_name"] = new_data.get("dhcp_name") or device["dhcp_name"]
     device["os_version"] = new_data.get("os_version") or device["os_version"]
     device["enterprise"] = new_data.get("enterprise") or device["enterprise"]
     device["vendor_class"] = new_data.get("vendor_class") or device["vendor_class"]
@@ -216,19 +218,19 @@ def process_mdns_packet(packet):
 
 
 def process_dhcp_packet(packet):
-    """处理 DHCPv6 请求（携带主机名、IPv4、IPv6）"""
+    """处理 DHCP 请求（携带主机名、IPv4）"""
     try:
         mac = packet[Ether].src
 
-        new_data = {"dhcp_name": None, "vendor_class": None}
+        new_data = {"dhcp_name": None, "vendor_class": None, "ipv4": None}
         for option in packet[DHCP].options:
             if isinstance(option, tuple):
                 if option[0] == 'hostname':  # Option 12
                     new_data["hostname"] = option[1].decode('utf-8', errors='ignore')
                 if option[0] == 'vendor_class_id':  # Option 60
-                    new_data["vendor"] = option[1].decode()
+                    new_data["vendor_class"] = option[1].decode()
                 if option[0] == 'requested_addr':  # Option 50
-                    new_data["ip4"] = option[1]
+                    new_data["ipv4"] = option[1]
 
         update_device_info(mac, new_data)
 
@@ -237,20 +239,20 @@ def process_dhcp_packet(packet):
 
 
 def process_dhcpv6_packet(packet):
-    """处理 DHCPv6 请求（携带主机名、IPv4、IPv6）"""
+    """处理 DHCPv6 请求（携带主机名、IPv6）"""
     try:
         mac = packet[Ether].src
 
-        new_data = {"dhcp_name": None, "enterprise": None, "vendor_class":None}
+        new_data = {"dhcp_name": None, "enterprise": None, "vendor_class": None}
         # 提取域名信息
         if DHCP6OptClientFQDN in packet:
             domain_name = packet[DHCP6OptClientFQDN].fqdn
-            new_data["dhcp_name"] = domain_name
+            new_data["dhcp_name"] = domain_name.decode('utf-8')
 
         # 提取Vendor Class信息
         if DHCP6OptVendorClass in packet:
             vendor_class = packet[DHCP6OptVendorClass]
-            new_data["enterprise"] =  IANA_ENTERPRISE_NUMBERS[vendor_class.enterprisenum]
+            new_data["enterprise"] = IANA_ENTERPRISE_NUMBERS[vendor_class.enterprisenum]
             for data in vendor_class.vcdata:
                 new_data["vendor_class"] = data.data.decode('utf-8')
 
@@ -278,18 +280,21 @@ def process_packet(packet):
             process_dhcpv6_packet(packet)
         elif packet.haslayer(DHCP):
             process_dhcp_packet(packet)
+        elif packet.haslayer(SMB_Header):
+            process_netbios_browser(packet)
     except Exception as e:
         print(f"[数据包处理异常] {e}")
 
 
-def run(interface="WLAN", duration=600, save_path="result"):
+def run(interface="WLAN", duration=12*60, save_path="result"):
+    filter_str = "icmp6 or udp port 5353 or 137 or 138 or 67 or 68 or 546 or 547"
     """主捕获循环"""
     try:
         print(f"[*] 开始捕获 {duration} 秒...")
         sniff(
             iface=interface,
             prn=process_packet,
-            filter="icmp6 or udp port 5353 or 137 or 138",  # mDNS 和 ICMPv6
+            filter=filter_str,
             timeout=duration,
             store=0
         )
@@ -300,7 +305,9 @@ def run(interface="WLAN", duration=600, save_path="result"):
         if GLOBAL_DEVICES:
             df = pd.DataFrame(GLOBAL_DEVICES.values())
             print(df)
-            df = df[["mac", "nbns_name", "hostname", "ipv4", "ipv6_lla", "ipv6_gua", "first_seen", "last_seen"]]
+            df = df[["mac", "ipv4", "hostname", "ipv6_lla", "ipv6_gua",
+                     "nbns_name", "dhcp_name", "enterprise", "vendor_class",
+                     "first_seen", "last_seen"]]
 
             # 生成文件名
             os.makedirs(save_path, exist_ok=True)
@@ -314,4 +321,4 @@ def run(interface="WLAN", duration=600, save_path="result"):
 
 
 if __name__ == "__main__":
-    run(duration=10)  # 测试运行10秒
+    run(duration=10)

@@ -9,9 +9,12 @@ from scapy.sendrecv import sr1, srp1, sendp, send, sr
 from IPy import IP as IPY
 
 
+info_list = []
+
+
 def is_alive(dst_ip):
     pkt = ARP(pdst=dst_ip)
-    ans = sr1(pkt, timeout=0.5, verbose=False)
+    ans = sr1(pkt, timeout=1, verbose=False)
     if ans is not None:
         if ans.haslayer(ARP) and ans[ARP].op == 2:
             src_mac = ans[ARP].hwsrc
@@ -65,7 +68,7 @@ def nbns_get_name(packet):
     if packet.haslayer(NBNSHeader) and packet.haslayer(NBNSNodeStatusResponse):
         nbns_response = packet.getlayer(NBNSNodeStatusResponse)
         # nbns_response.show()
-        name_list = nbns_response.NODE_NAME
+        name_list = nbns_response.NODE_NAME.decode('utf-8')
         for name in name_list:
             hostname = name.NETBIOS_NAME
             print(hostname)
