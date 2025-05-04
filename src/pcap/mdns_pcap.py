@@ -58,25 +58,24 @@ def handle_mdns_packet(packet):
                                     info["tua"] = ip
                                 else:
                                     info["gua"] = ip
-                for answer in dns.ar:
-                    if answer.type == 1:   # A
-                        hostname = answer.rrname.decode('utf-8')
-                        info["hostname"] = hostname
-                        ip4 = answer.rdata
-                        info["ip4"] = ip4
-                    if answer.type == 28:    # AAAA
-                        hostname = answer.rrname.decode('utf-8')
-                        info["hostname"] = hostname
-                        ip = answer.rdata
-                        if is_lla_ipv6(ip):
-                            info["lla"] = ip
-                        if is_gua_ipv6(ip):
-                            if info["gua"] is None:
-                                info["gua"] = ip
-                            else:
-                                info["tua"] = ip
-                # if info["hostname"] and info["lla"] and info["gua"] and info["ip4"]:
-                if True:
+                # for answer in dns.ar:
+                #     if answer.type == 1:   # A
+                #         hostname = answer.rrname.decode('utf-8')
+                #         info["hostname"] = hostname
+                #         ip4 = answer.rdata
+                #         info["ip4"] = ip4
+                #     if answer.type == 28:    # AAAA
+                #         hostname = answer.rrname.decode('utf-8')
+                #         info["hostname"] = hostname
+                #         ip = answer.rdata
+                #         if is_lla_ipv6(ip):
+                #             info["lla"] = ip
+                #         if is_gua_ipv6(ip):
+                #             if info["gua"] is None:
+                #                 info["gua"] = ip
+                #             else:
+                #                 info["tua"] = ip
+                if info["hostname"] and info["lla"] and info["gua"] and info["ip4"]:
                     info["mac"] = packet[Ether].src
                     # print(info)
                     return info
@@ -84,7 +83,7 @@ def handle_mdns_packet(packet):
         print(f"解析数据包时发生错误: {e}")
 
 
-def run(pcap_path='data/mdns.pcapng', save_file="result/mdns_pcap.csv"):
+def run(pcap_path='data/mdns.pcapng', save_file="result/dns-sd_mdns_pcap.csv"):
     mdns_info_list = []
     packets = rdpcap(pcap_path)
     for pkt in packets:
@@ -95,12 +94,12 @@ def run(pcap_path='data/mdns.pcapng', save_file="result/mdns_pcap.csv"):
         df = pd.DataFrame(mdns_info_list)
         # 去除完全重复的行（所有列值相同）
         df = df.drop_duplicates()
-        # df = df.drop_duplicates(subset=['mac', 'ip4', 'hostname', 'lla', 'gua'], keep='last')
+        df = df.drop_duplicates(subset=['mac', 'ip4', 'hostname', 'lla', 'gua'], keep='last')
         # 按转换后的整数值排序
-        # df['ip_int'] = df['ip4'].apply(ip_to_int)
-        # df = df.sort_values('ip_int')
+        df['ip_int'] = df['ip4'].apply(ip_to_int)
+        df = df.sort_values('ip_int')
         # 删除临时列（可选）
-        # df = df.drop('ip_int', axis=1)
+        df = df.drop('ip_int', axis=1)
         df.to_csv(save_file, index=False, header=not os.path.exists(save_file), mode='a')
         print(f"数据已保存到 {save_file}")
     else:
@@ -108,5 +107,5 @@ def run(pcap_path='data/mdns.pcapng', save_file="result/mdns_pcap.csv"):
 
 
 if __name__ == "__main__":
-    run("data/school_mdns.pcapng", "result/shool_mdns_pcap.csv")
+    run("data/mdns.pcapng", "result/mdns.csv")
 
