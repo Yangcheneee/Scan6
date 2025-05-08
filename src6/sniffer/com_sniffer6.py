@@ -1,21 +1,16 @@
 import os
-import sys
 from datetime import datetime
-
-from scapy.layers.dhcp import DHCP, BOOTP
-from scapy.layers.dhcp6 import DHCP6_Solicit, DHCP6_InfoRequest, DHCP6OptClientFQDN, DHCP6OptVendorClass
-from scapy.layers.inet6 import IPv6, ICMPv6ND_NA, ICMPv6NDOptDstLLAddr, ICMPv6EchoReply
-from scapy.layers.inet6 import ICMPv6MLReport, ICMPv6MLQuery  # MLDv1/v2 协议层
-from scapy.layers.l2 import Ether
-import pandas as pd
 from scapy.all import sniff
-from scapy.layers.dns import DNS, DNSRR
-from scapy.layers.netbios import NBNSQueryRequest, NBNSRegistrationRequest
-from scapy.layers.netbios import NBTDatagram
+from scapy.layers.l2 import Ether
+from scapy.layers.inet6 import IPv6, ICMPv6ND_NA, ICMPv6MLReport, ICMPv6EchoReply
+from scapy.layers.dhcp import DHCP
+from scapy.layers.dhcp6 import DHCP6_Solicit, DHCP6_InfoRequest, DHCP6OptClientFQDN, DHCP6OptVendorClass
+from scapy.layers.llmnr import LLMNRQuery
+from scapy.layers.dns import DNS
+from scapy.layers.netbios import NBNSRegistrationRequest, NBNSNodeStatusResponse
 from scapy.layers.smb import BRWS_HostAnnouncement, SMB_Header
-
-sys.path.append('D:/Project/Scan6/venv/Lib/site-packages')
-
+from src6.scan import name_resolver
+import pandas as pd
 # ========================== 全局配置 ==========================
 GLOBAL_DEVICES = {}  # 核心数据结构: {mac: device_info}
 LLA_PREFIX = ("fe80::", "fe80:")  # 链路本地地址前缀
@@ -117,9 +112,11 @@ def process_icmpv6_mld(packet):
             # # 遍历组记录（MLDv2 支持多组）
             # for record in mld.mldaddrrecords:
             #     multicast_groups.add(record.mcastaddr)
-
+            new_data = {
+                "ipv6_lla": ipv6_lla
+            }
             # 更新设备信息
-            update_device_info(mac, {"ipv6_lla": ipv6_lla})
+            update_device_info(mac, new_data)
     except Exception as e:
         print(f"[MLD 解析错误] {e}")
 
@@ -135,12 +132,12 @@ def process_icmpv6_echo_reply(packet):
 
             # 提取 MAC 地址（需从以太网层获取，适用于本地网络）
             mac = packet[Ether].src
-
-            # 更新设备信息（关联 MAC 和 IPv6 地址）
-            update_device_info(mac, {
+            new_data = {
                 "ipv6_lla": src_ip if is_lla(src_ip) else None,
                 "ipv6_gua": [src_ip] if is_gua(src_ip) else [],
-            })
+            }
+            # 更新设备信息（关联 MAC 和 IPv6 地址）
+            update_device_info(mac, new_data)
     except Exception as e:
         print(f"[ICMPv6 Echo Reply 解析错误] {e}")
 
@@ -161,11 +158,12 @@ def process_netbios_browser(packet):
                 server_name = browser.ServerName.decode('utf-8', errors='ignore').strip('\x00 ')
                 os_version = "Windows " + str(browser.OSVersionMajor) + "." + str(browser.OSVersionMinor)
 
-                # 更新设备信息
-                update_device_info(mac, {
+                new_data = {
                     "hostname": server_name,
                     "os_version": os_version
-                })
+                }
+                # 更新设备信息
+                update_device_info(mac, new_data)
     except Exception as e:
         print(f"[NetBIOS Browser 解析错误] {e}")
 
@@ -183,7 +181,10 @@ def process_nbns_packet(packet):
 
         # 更新设备信息
         if nbns_name:
-            update_device_info(mac, {"nbns_name": nbns_name})
+            new_data = {
+                "nbns_name": nbns_name
+            }
+            update_device_info(mac, new_data)
     except Exception as e:
         print(f"[NBNS 解析错误] {e}")
 
@@ -227,11 +228,11 @@ def process_dhcp_packet(packet):
             if isinstance(option, tuple):
                 if option[0] == 'hostname':  # Option 12
                     new_data["hostname"] = option[1].decode('utf-8', errors='ignore')
+                    name_resolver.mdns(new_data["hostname"])
                 if option[0] == 'vendor_class_id':  # Option 60
                     new_data["vendor_class"] = option[1].decode()
                 if option[0] == 'requested_addr':  # Option 50
                     new_data["ipv4"] = option[1]
-
         update_device_info(mac, new_data)
 
     except Exception as e:
@@ -255,11 +256,32 @@ def process_dhcpv6_packet(packet):
             new_data["enterprise"] = IANA_ENTERPRISE_NUMBERS[vendor_class.enterprisenum]
             for data in vendor_class.vcdata:
                 new_data["vendor_class"] = data.data.decode('utf-8')
-
         update_device_info(mac, new_data)
 
     except Exception as e:
         print(f"[DHCPv6 解析错误] {e}")
+
+
+def process_llmnr_packet(packet):
+    """处理 LLMNR 名字注册报文（主机名）"""
+    dns = packet[LLMNRQuery]
+    if dns.qr == 0 and dns.qdcount > 0 and dns.qd[0].qtype == 255:
+        hostname = dns.qd[0].qname.decode('utf-8').rstrip('.')
+        name_resolver.mdns(hostname)
+
+
+def process_nbtstat_packet(packet):
+    mac = packet[Ether].src
+    hostnames = [
+        node.NBName.decode('utf-8').split('\x00')[0].strip()
+        for node in packet.NodeName
+        if node.NBName.decode('utf-8').strip() not in ("", "WORKGROUP")
+    ]
+    if hostnames:
+        new_data = {
+            "hostname": hostnames[0]
+        }
+        update_device_info(mac, new_data)
 
 
 # ========================== 主流程 ==========================
@@ -268,18 +290,22 @@ def process_packet(packet):
     try:
         if packet.haslayer(ICMPv6ND_NA):
             process_icmpv6_na(packet)
-        elif packet.haslayer(DNS):
-            process_mdns_packet(packet)
-        elif packet.haslayer(NBNSRegistrationRequest):
-            process_nbns_packet(packet)
         elif packet.haslayer(ICMPv6MLReport):
             process_icmpv6_mld(packet)
-        elif packet.haslayer(ICMPv6EchoReply):
-            process_icmpv6_echo_reply(packet)
-        elif packet.haslayer(DHCP6_Solicit) or packet.haslayer(DHCP6_InfoRequest):
-            process_dhcpv6_packet(packet)
         elif packet.haslayer(DHCP):
             process_dhcp_packet(packet)
+        elif packet.haslayer(DHCP6_Solicit) or packet.haslayer(DHCP6_InfoRequest):
+            process_dhcpv6_packet(packet)
+        elif packet.haslayer(NBNSRegistrationRequest):
+            process_nbns_packet(packet)
+        elif packet.haslayer(LLMNRQuery):
+            process_llmnr_packet(packet)
+        elif packet.haslayer(DNS):
+            process_mdns_packet(packet)
+        elif packet.haslayer(NBNSNodeStatusResponse):
+            process_nbtstat_packet(packet)
+        elif packet.haslayer(ICMPv6EchoReply):
+            process_icmpv6_echo_reply(packet)
         elif packet.haslayer(SMB_Header):
             process_netbios_browser(packet)
     except Exception as e:
@@ -287,7 +313,20 @@ def process_packet(packet):
 
 
 def run(interface="WLAN", duration=12*60, save_path="D:/Project/Scan6/result/comscan6"):
-    filter_str = "icmp6 or udp port 5353 or 137 or 138 or 67 or 68 or 546 or 547"
+    # 加入DHCPv6组播组
+    def join_dhcpv6_multicast():
+        import socket
+        import struct
+        # DHCPv6组播地址是ff02::1:2
+        mreq = struct.pack("16sI", socket.inet_pton(socket.AF_INET6, "ff02::1:2"), 0)
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_JOIN_GROUP, mreq)
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_MULTICAST_LOOP, 0)
+
+        return sock
+    join_dhcpv6_multicast()
+    filter_str = "icmp6 or udp port 5353 or 5355 or 137 or 138 or 67 or 68 or 546 or 547"
     """主捕获循环"""
     try:
         print(f"[*] 开始捕获 {duration} 秒...")
@@ -304,7 +343,6 @@ def run(interface="WLAN", duration=12*60, save_path="D:/Project/Scan6/result/com
         # 保存结果
         if GLOBAL_DEVICES:
             df = pd.DataFrame(GLOBAL_DEVICES.values())
-            print(df)
             df = df[["mac", "ipv4", "hostname", "ipv6_lla", "ipv6_gua",
                      "nbns_name", "dhcp_name", "enterprise", "vendor_class",
                      "first_seen", "last_seen"]]
@@ -321,4 +359,4 @@ def run(interface="WLAN", duration=12*60, save_path="D:/Project/Scan6/result/com
 
 
 if __name__ == "__main__":
-    run(duration=10)
+    run(duration=60)

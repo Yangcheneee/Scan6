@@ -5,7 +5,7 @@ from scapy.layers.dhcp import DHCP, BOOTP
 from scapy.layers.dhcp6 import DHCP6_Solicit, DHCP6_InfoRequest, DHCP6OptClientFQDN, DHCP6OptVendorClass
 from scapy.layers.inet6 import IPv6, ICMPv6ND_NA, ICMPv6NDOptDstLLAddr, ICMPv6EchoReply
 from scapy.layers.inet6 import ICMPv6MLReport, ICMPv6MLQuery  # MLDv1/v2 协议层
-from scapy.layers.l2 import Ether
+from scapy.layers.l2 import Ether, ARP
 import pandas as pd
 from scapy.all import sniff
 from scapy.layers.dns import DNS, DNSRR
@@ -50,17 +50,18 @@ def update_device_info(mac: str, new_data: dict):
     if mac not in GLOBAL_DEVICES:
         GLOBAL_DEVICES[mac] = {
             "mac": mac,
-            "nbns_name": None,
-            "os_version": None,
-            "llmnr_name": None,
             "hostname": None,
+            "nbns_name": None,
+            "llmnr_name": None,
+            "mdns_name": None,
             "dhcp_name": None,
-            "enterprise": None,
-            "vendor_class": None,
             "ipv4": None,
             "ipv6_lla": None,
             "ipv6_gua": [],
             "nbns_info": [],
+            "os_version": None,
+            "enterprise": None,
+            "vendor_class": None,
             "first_seen": datetime.now(),
             "last_seen": datetime.now()
         }
@@ -94,7 +95,12 @@ def process_icmpv6_na(packet):
         target_ip = na.tgt
 
         # 构建数据
-        new_data = {"ipv6_lla": target_ip} if is_lla(target_ip) else {"ipv6_gua": [target_ip]}
+        if is_lla(target_ip):
+            new_data = {"ipv6_lla": target_ip}
+        elif is_lla(target_ip):
+            new_data = {"ipv6_gua": [target_ip]}
+        else:
+            new_data = {}
         update_device_info(mac, new_data)
 
     except Exception as e:
@@ -262,7 +268,13 @@ def process_dhcpv6_packet(packet):
         print(f"[DHCPv6 解析错误] {e}")
 
 
+def process_arp_reply(packet):
+    pass
+
+
 # ========================== 主流程 ==========================
+
+
 def process_packet(packet):
     """统一处理数据包分发"""
     try:
@@ -282,6 +294,8 @@ def process_packet(packet):
             process_dhcp_packet(packet)
         elif packet.haslayer(SMB_Header):
             process_netbios_browser(packet)
+        elif packet.haslayer(ARP):
+            process_arp_reply(packet)
     except Exception as e:
         print(f"[数据包处理异常] {e}")
 

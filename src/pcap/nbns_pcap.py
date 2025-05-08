@@ -1,12 +1,8 @@
-from scapy.all import *
 import os
-
-from scapy.layers.dns import DNS
 from scapy.layers.l2 import Ether
-from scapy.layers.llmnr import LLMNRQuery
-from scapy.layers.inet import IP, UDP
-from scapy.layers.inet6 import IPv6
+from scapy.layers.inet import IP
 from scapy.layers.netbios import NBNSRegistrationRequest
+from scapy.utils import rdpcap
 
 
 def process_pcap(pcap_file):

@@ -46,7 +46,7 @@ def handle_dhcp_packet(packet):
             return info
 
 
-def run(save_file="result/dhcp_pcap.csv"):
+def run(save_file="result/dhcp_pcap_all.csv"):
     info_list = []
     packets = rdpcap('data/dhcp.pcapng')
     for pkt in packets:
